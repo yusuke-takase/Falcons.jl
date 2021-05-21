@@ -27,8 +27,10 @@ end
     
     smp_rate = scan_strategy_struct.sampling_rate
     loop_times = @views ((stop - start) * smp_rate)  + smp_rate
-    pix_tod = @views zeros(Int32, loop_times, length(FP_theta))
+    #pix_tod = @views zeros(Int32, loop_times, length(FP_theta))
     psi_tod = @views zeros(Float32, loop_times, length(FP_theta))
+    ang_tod = @views zeros(Float64, 2, loop_times, length(FP_theta))
+    
     resol = @views Resolution(nside)
     
     antisun_axis = @views @SVector [1.0, 0.0, 0.0]
@@ -84,10 +86,10 @@ end
             longitude = pointing_t × (pointing_t × z_axis)
             bore_ang = vec2ang_ver2(pointing_t[1], pointing_t[2], pointing_t[3])
 
-            #ang_tod[1, i, j] = bore_ang[1]
-            #ang_tod[2, i, j] = bore_ang[2]
+            ang_tod[1, i, j] = bore_ang[1]
+            ang_tod[2, i, j] = bore_ang[2]
             
-            pix_tod[i, j] = ang2pixRing(resol, bore_ang[1], bore_ang[2])
+            #pix_tod[i, j] = ang2pixRing(resol, bore_ang[1], bore_ang[2])
             #pix_tod[i, j] = ang2pix(_m_, bore_ang[1], bore_ang[2])
             
             #=
@@ -105,5 +107,5 @@ end
             psi_tod[i, j] = acos(cosK) * sign(divergent_vec[3]) * sign(pointing_t[3])
         end
     end
-    return pix_tod, psi_tod
+    return ang_tod[1,:,:], ang_tod[2,:,:], psi_tod
 end
