@@ -13,10 +13,10 @@ function HitMap(nside, theta_tod, phi_tod)
 end
 
 
-function Mapmaking(scan_strategy_struct)
+function Mapmaking(scan_strategy_struct, split_num)
     resol = Resolution(scan_strategy_struct.nside)
     npix = nside2npix(scan_strategy_struct.nside)
-    split_num = 2
+    
     month = Int(scan_strategy_struct.times / split_num)
     hwp_revol_rate = 2.0 * π * (scan_strategy_struct.hwp_rpm/ 60.0)
     
