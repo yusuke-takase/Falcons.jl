@@ -29,7 +29,7 @@ end
     loop_times = @views ((stop - start) * smp_rate)  + smp_rate
     #pix_tod = @views zeros(Int32, loop_times, length(FP_theta))
     psi_tod = @views zeros(Float32, loop_times, length(FP_theta))
-    ang_tod = @views zeros(Float64, 2, loop_times, length(FP_theta))
+    ang_tod = @views zeros(Float32, 2, loop_times, length(FP_theta))
     
     resol = @views Resolution(nside)
     
@@ -78,7 +78,7 @@ end
             q_det = Q * detector_orientation_0 / Q
             travel_direction = Q * travel_direction_0 / Q
             pointing_t = @SVector [P.q1, P.q2, P.q3]
-            travel_direction_vec = [travel_direction.q1, travel_direction.q2, travel_direction.q3]
+            travel_direction_vec = @SVector [travel_direction.q1, travel_direction.q2, travel_direction.q3]
             #=
             The direction of movement can be calculated by the outer product of the pointhing vector and the detector orientaion vector.
             The vector of meridians can be calculated by combining the outer product of pointing and z axis.
