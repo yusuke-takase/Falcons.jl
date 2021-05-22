@@ -1,5 +1,6 @@
 using Falcons
 using Test
+using Healpix
 
 day = 60 * 60 * 24
 year = day * 365
@@ -41,8 +42,9 @@ end
 end
 
 @testset "Mapmaking-Test" begin
-    outmap = Mapmaking(ss)
-    @test length(outmap[1]) == 12*ss.nside^2
+    n = 2
+    outmap = Mapmaking(ss, n)
+    @test length(outmap[1]) == nside2npix(ss.nside)
     @show outmap[1][1:5]
     @show outmap[2][1:5]
     @show outmap[3][1:5]
