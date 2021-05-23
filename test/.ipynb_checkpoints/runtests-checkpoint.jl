@@ -20,7 +20,7 @@ ss.spin_rpm = 0.04
 ss.hwp_rpm = 0.05
 ss.start_point = "pole"
 
-@testset "scan_strategy_structure-Test" begin
+@testset "ScanStrategy_structure-Test" begin
     @test typeof(ss) <: ScanStrategy
     @show fieldnames(ScanStrategy)
     println("Test ScanStrategy ==> ", ss)
@@ -36,14 +36,9 @@ end
 
 @testset "Mapmaking-Test" begin
     n = 2
-<<<<<<< HEAD
     outmap = Mapmaking(ss, 2)
     @test length(outmap[1]) == nside2npix(ss.nside)
-=======
-    outmap = Mapmaking(ss, n)
-    @test length(outmap[1]) == nside2npix(ss.nside)
     @test typeof(outmap[1]) <: Array
->>>>>>> develop
     @show outmap[1][1:5]
     @show outmap[2][1:5]
     @show outmap[3][1:5]
