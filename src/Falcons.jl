@@ -10,7 +10,7 @@ include("./function/func4scan.jl")
 include("./function/scanning.jl")
 include("./function/mapmake.jl")
 
-export get_scan_tod, scan_strategy
+export get_scan_tod, ScanStrategy
 export Mapmaking, HitMap
 
 end

@@ -1,16 +1,16 @@
-mutable struct scan_strategy
+mutable struct ScanStrategy
     nside::Int
     times::Int
     sampling_rate::Int
-    alpha
-    beta
-    prec_period
-    spin_rpm
-    hwp_rpm
-    FP_theta
-    FP_phi
-    start_point
-    scan_strategy() = new()
+    alpha::AbstractFloat
+    beta::AbstractFloat
+    prec_period::AbstractFloat
+    spin_rpm::AbstractFloat
+    hwp_rpm::AbstractFloat
+    FP_theta:: AbstractArray{AbstractFloat,1}
+    FP_phi:: AbstractArray{AbstractFloat,1}
+    start_point::AbstractString
+    ScanStrategy() = new()
 end
 
 
