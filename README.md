@@ -10,7 +10,7 @@ From the Julia REPL, run
 
 ```julia
 import Pkg
-Pkg.add("Falcons.jl")
+Pkg.add("Falcons")
 ```
 
 ## Usage example
