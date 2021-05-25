@@ -7,7 +7,7 @@ day = 60 * 60 * 24
 year = day * 365
 prec1 = 60 * 60 * 3
 
-ss = ScanStrategy()
+ss = ScanningStrategy()
 ss.nside = 128
 ss.times = day
 ss.sampling_rate = 2
@@ -20,10 +20,10 @@ ss.spin_rpm = 0.04
 ss.hwp_rpm = 0.05
 ss.start_point = "pole"
 
-@testset "ScanStrategy_structure-Test" begin
-    @test typeof(ss) <: ScanStrategy
-    @show fieldnames(ScanStrategy)
-    println("Test ScanStrategy ==> ", ss)
+@testset "ScanningStrategy_structure-Test" begin
+    @test typeof(ss) <: ScanningStrategy
+    @show fieldnames(ScanningStrategy)
+    println("Test ScanningStrategy ==> ", ss)
 end
 
 @testset "get_scan_tod-Test" begin    

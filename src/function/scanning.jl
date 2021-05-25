@@ -1,4 +1,4 @@
-mutable struct ScanStrategy
+mutable struct ScanningStrategy
     nside::Int
     times::Int
     sampling_rate::Int
@@ -10,7 +10,7 @@ mutable struct ScanStrategy
     FP_theta:: AbstractArray{AbstractFloat,1}
     FP_phi:: AbstractArray{AbstractFloat,1}
     start_point::AbstractString
-    ScanStrategy() = new()
+    ScanningStrategy() = new()
 end
 
 
