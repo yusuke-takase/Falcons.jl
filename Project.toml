@@ -1,7 +1,7 @@
 name = "Falcons"
 uuid = "eba0fb4b-2daf-4740-90d2-e5655143e0a0"
 authors = ["Yusuke Takase <takase_y@s.okayama-u.ac.jp>"]
-version = "0.1.2"
+version = "0.1.3"
 
 [compat]
 julia = "1.5"
