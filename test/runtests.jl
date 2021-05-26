@@ -1,7 +1,6 @@
 using Falcons
 using Healpix
 using Test
-using Healpix
 
 day = 60 * 60 * 24
 year = day * 365
