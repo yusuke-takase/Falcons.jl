@@ -4,7 +4,8 @@ Mapmaking is available for computing hitmap and crosslink maps.
 ```julia
 Mapmaking(ScanningStrategy(), split_num::Int)
 ```
-This function divides the observation time specified by `ScanningStrategy()` by the number specified by `split_num`. This is to avoid memory overload caused by calculating a huge amount of TOD data at once.
+This function splits the observation time specified by `ScanningStrategy()` by the number specified by `split_num`, calculates the pointing TOD, and then creates a map using it.
+The reason for the split calculation is to avoid overloading the memory by calculating a huge amount of TOD data at once.
 
 For example,
 ```julia

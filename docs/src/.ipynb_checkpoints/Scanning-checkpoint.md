@@ -30,6 +30,7 @@ ss.times = 100
 No default values are set, so be sure to specify values for all variables by the user.
 
 ## Generate pointing TOD
+The information about the orientation of a satellite at a certain time is called pointing. The pointing is defined by (theta, phi, psi), where theta and phi are parameters of the 3D polar coordinates and psi is the angle between the scan direction and the meridian of the sky.
 
 Once the scanning strategy is determined, computing the pointing is straightforward.
 ```julia
@@ -37,4 +38,6 @@ theta_tod, phi_tod, psi_tod = get_scan_tod(ScanningStrategy(), start::Int, stop:
 ```
 Enter an integer value for the time to be calculated in the `start` and `stop` fields.
 
-`theta_tod` and `phi_tod` contain the pointing data in chronological order, and `psi_tod` contains the scan angle according to the IAU definition.
+`theta_tod` and `phi_tod` contain the pointing data in chronological order, and `psi_tod` contains the scan angle according to the [COSMO(HEALPix)](https://lambda.gsfc.nasa.gov/product/about/pol_convention.cfm) definition.
+
+
