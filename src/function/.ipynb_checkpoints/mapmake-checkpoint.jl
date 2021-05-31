@@ -1,4 +1,4 @@
-function angtod2hitmap(nside, theta_tod, phi_tod)
+function angtod2hitmap(nside::Int, theta_tod::Array{T}, phi_tod::Array{T}) where {T}
     hit_map = zeros(Int64, nside2npix(nside))
     resol = Resolution(nside)
     for j in eachindex(theta_tod[1,:])
@@ -12,16 +12,16 @@ function angtod2hitmap(nside, theta_tod, phi_tod)
     return hit_map
 end
 
-function pixtod2hitmap(nside, pix)
+function pixtod2hitmap(nside::Int, pixtod::Array{T}) where {T}
     npix = nside2npix(nside)
     hit_map = zeros(Int64, npix)
-    for i = eachindex(pix)
-        hit_map[pix[i]] += 1
+    for i = eachindex(pixtod)
+        hit_map[pixtod[i]] += 1
     end
     return hit_map
 end
 
-function Mapmaking(ScanningStrategyStructure, split_num)
+function Mapmaking(ScanningStrategyStructure, split_num::Int)
     SSS = @views ScanningStrategyStructure
     resol = Resolution(SSS.nside)
     npix = nside2npix(SSS.nside)
@@ -75,7 +75,7 @@ function Mapmaking(ScanningStrategyStructure, split_num)
 end
 
 
-function ScanningStrategy2map(ScanningStrategyStructure, split_num)
+function ScanningStrategy2map(ScanningStrategyStructure, split_num::Int)
     SSS = @views ScanningStrategyStructure
     resol = Resolution(SSS.nside)
     npix = nside2npix(SSS.nside)
@@ -125,7 +125,7 @@ function ScanningStrategy2map(ScanningStrategyStructure, split_num)
     return out_map
 end
 
-function Genmap(map_array)
+function Genmap(map_array::Array{T}) where {T}
     nside = npix2nside(length(map_array))
     m = Map{Float64, RingOrder}(nside)
     m.pixels .= map_array

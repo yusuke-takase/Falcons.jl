@@ -7,14 +7,14 @@ mutable struct ScanningStrategy
     prec_period::AbstractFloat
     spin_rpm::AbstractFloat
     hwp_rpm::AbstractFloat
-    FP_theta:: AbstractArray{AbstractFloat,1}
-    FP_phi:: AbstractArray{AbstractFloat,1}
+    FP_theta::AbstractArray{AbstractFloat,1}
+    FP_phi::AbstractArray{AbstractFloat,1}
     start_point::AbstractString
     ScanningStrategy() = new()
 end
 
 
-@inline function get_scan_tod(ScanningStrategyStructure, start, stop)
+@inline function get_scan_tod(ScanningStrategyStructure, start::Int, stop::Int)
     SSS = @views ScanningStrategyStructure
     nside = SSS.nside
     alpha = @views deg2rad(SSS.alpha)
@@ -111,7 +111,7 @@ end
     return ang_tod[1,:,:], ang_tod[2,:,:], psi_tod
 end
 
-@inline function get_scan_tod_pix(ScanningStrategyStructure, start, stop)
+@inline function get_scan_tod_pix(ScanningStrategyStructure, start::Int, stop::Int)
     SSS = @views ScanningStrategyStructure
     nside = SSS.nside
     alpha = @views deg2rad(SSS.alpha)
