@@ -39,7 +39,7 @@ ss.start_point = "pole" #You can choose "pole" or "equator"
 No default values are set, so be sure to specify values for all variables by the user.
 
 ## Generate pointing TOD
-The information about the orientation of a satellite at a certain time is called pointing. The pointing is defined by (theta, phi, psi), where theta and phi are parameters of the 3D polar coordinates and psi is the angle between the scan direction and the meridian of the sky.
+The information about the orientation of a satellite at a certain time is called pointing. The pointing is defined by $(\theta, \phi, \psi)$, where $\theta$ and $\phi$ are parameters of the 3D polar coordinates and $\psi$ is the angle between the scan direction and the meridian of the sky.
 
 Once the scanning strategy is determined, computing the pointing is straightforward.
 ```julia
