@@ -25,7 +25,7 @@ Pkg.add("Falcons")
 ```
 
 ## Threading 
-Falcons uses multithreading technology internally when computing pointing TOD. It uses the @threads macro provided by julia, and to use this feature, users need to make the following declarations in the configuration file of the computing environment (ex. .bashrc) in advance.
+Falcons uses multithreading technology internally when computing pointing TOD. It uses the `@threads` macro provided by Julia, and to use this feature, users need to make the following declarations in the configuration file of the computing environment (ex. `.bashrc`) in advance.
 ```bash
 export JULIA_NUM_THREADS=4
 ```
