@@ -3,13 +3,23 @@ CurrentModule = Falcons
 ```
 
 # Falcons
-Welcome to FLCONS(Fast Algorithm for Locus Computing ON the Sky).
-FALCONS is a software that rapidly calculates the tod of pointing information required for satellite observation simulations.
-FALCONS supports multi-detectors and can construct a focal plane by specifying (theta,phi) arrays centered on the boresight.
-The mapmaking function creates a crosslink map from the rapidly obtained time series pointing information.
+This is the documentation of [Falcons](https://github.com/yusuke-takase/Falcons.jl)(Fast Algorithm for Locus Computing ON the Sky), a package for fast simulation of satellite observations.
+
+CMB polarimetric satellites such as LiteBIRD set up an appropriate scan strategy to reduce systematic errors, and Falcons can calculate all-sky hit maps, crosslink maps, etc. by simply setting the parameters of this scan strategy. It also supports observations with multi-channel detectors.
+
+## Installation
+From the Julia REPL, run
+```julia
+import Pkg
+Pkg.add("Falcons")
+```
+## Tutorial
+The tutorial is available on the github page in jupyternotebook format.
+Please refer to [here](https://github.com/yusuke-takase/Falcons.jl/tree/master/tutorial).
 
 
-Documentation for [Falcons](https://github.com/yusuke-takase/Falcons.jl).
+## Documentation
+The documentation was built using [Documenter.jl](https://github.com/JuliaDocs).
 
 ```@index
 ```
