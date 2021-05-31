@@ -125,7 +125,7 @@ function ScanningStrategy2map(ScanningStrategyStructure, split_num::Int)
     return out_map
 end
 
-function Genmap(map_array::Array{T}) where {T}
+function Genmap(map_array::Array)
     nside = npix2nside(length(map_array))
     m = Map{Float64, RingOrder}(nside)
     m.pixels .= map_array
