@@ -43,7 +43,7 @@ The information about the orientation of a satellite at a certain time is called
 
 Once the scanning strategy is determined, computing the pointing is straightforward.
 ```julia
-theta_tod, phi_tod, psi_tod = get_scan_tod(ScanningStrategy(), start::Int, stop::Int)
+theta_tod, phi_tod, psi_tod = get_pointings(ScanningStrategy(), start::Int, stop::Int)
 ```
 Enter an integer value for the time to be calculated in the `start` and `stop` fields.
 
