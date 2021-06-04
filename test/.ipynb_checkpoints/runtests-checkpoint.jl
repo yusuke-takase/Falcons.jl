@@ -1,15 +1,14 @@
 using Falcons
 using Healpix
 using Test
-using Healpix
 
 day = 60 * 60 * 24
 year = day * 365
 prec1 = 60 * 60 * 3
 
-ss = ScanStrategy()
+ss = ScanningStrategy()
 ss.nside = 128
-ss.times = day
+ss.times = year
 ss.sampling_rate = 2
 ss.FP_theta = [0.0]
 ss.FP_phi = [0.0]
@@ -20,14 +19,14 @@ ss.spin_rpm = 0.04
 ss.hwp_rpm = 0.05
 ss.start_point = "pole"
 
-@testset "ScanStrategy_structure-Test" begin
-    @test typeof(ss) <: ScanStrategy
-    @show fieldnames(ScanStrategy)
-    println("Test ScanStrategy ==> ", ss)
+@testset "ScanningStrategy_structure-Test" begin
+    @test typeof(ss) <: ScanningStrategy
+    @show fieldnames(ScanningStrategy)
+    println("Test ScanningStrategy ==> ", ss)
 end
 
 @testset "get_scan_tod-Test" begin    
-    pix_tod, psi_tod = get_scan_tod(ss, 0, 30)
+    pix_tod, psi_tod = get_pointings(ss, 0, 30)
     @test typeof(pix_tod) <: Array
     @test typeof(psi_tod) <: Array
     @show pix_tod[1:10]
@@ -35,8 +34,8 @@ end
 end
 
 @testset "Mapmaking-Test" begin
-    n = 2
-    outmap = Mapmaking(ss, 2)
+    n = 6
+    outmap = Mapmaking(ss, n)
     @test length(outmap[1]) == nside2npix(ss.nside)
     @test typeof(outmap[1]) <: Array
     @show outmap[1][1:5]

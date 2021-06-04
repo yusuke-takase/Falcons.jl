@@ -33,20 +33,20 @@ function Mapmaking(ScanningStrategyStructure, split_num::Int)
     Cross = zeros(Float32, (2,4, npix))
     BEGIN = 0
     p = Progress(split_num)
-    @views @inbounds @simd for i = 1:split_num
+    @views @inbounds for i = 1:split_num
         #println("process=", i, "/", split_num)
         END = i * month
-        theta_tod, phi_tod, psi_tod = get_scan_tod(SSS, BEGIN, END)
+        theta_tod, phi_tod, psi_tod, time_array = get_pointings(SSS, BEGIN, END)
         #println("Start mapmaking!")
         
-        @views @inbounds @simd for j = eachindex(psi_tod[1,:])
+        @views @inbounds for j = eachindex(psi_tod[1,:])
             theta_tod_jth_det = theta_tod[:,j]
             phi_tod_jth_det = phi_tod[:,j]
             psi_tod_jth_det = psi_tod[:,j]
             @views @inbounds @simd for k = eachindex(psi_tod[:,1])
                 ipix = ang2pixRing(resol, theta_tod_jth_det[k], phi_tod_jth_det[k])
                 psi = psi_tod_jth_det[k]
-                TIME = BEGIN + (k - 1) / SSS.sampling_rate
+                t = time_array[k]
 
                 hit_map[ipix] += 1
 
@@ -61,7 +61,7 @@ function Mapmaking(ScanningStrategyStructure, split_num::Int)
 
             end
         end
-        BEGIN = END + 1
+        BEGIN = END
         next!(p)
     end
     
@@ -87,17 +87,17 @@ function ScanningStrategy2map(ScanningStrategyStructure, split_num::Int)
     Cross = zeros(Float32, (2,4, npix))
     BEGIN = 0
     p = Progress(split_num)
-    @inbounds @simd for i = 1:split_num
+    @views @inbounds for i = 1:split_num
         END = i * month
-        pix_tod, psi_tod = get_scan_tod_pix(SSS, BEGIN, END)
+        pix_tod, psi_tod, time_array = get_pointing_pixels(SSS, BEGIN, END)
         
-        @views @inbounds @simd for j = eachindex(psi_tod[1,:])
+        @views @inbounds for j = eachindex(psi_tod[1,:])
             pix_tod_jth_det = pix_tod[:,j]
             psi_tod_jth_det = psi_tod[:,j]
             @views @inbounds @simd for k = eachindex(psi_tod[:,1])
                 ipix = pix_tod_jth_det[k]
                 psi = psi_tod_jth_det[k]
-                TIME = BEGIN + (k - 1) / SSS.sampling_rate
+                t = time_array[k]
 
                 hit_map[ipix] += 1
 
@@ -109,10 +109,9 @@ function ScanningStrategy2map(ScanningStrategyStructure, split_num::Int)
                 Cross[2,3,ipix] += cos(3psi)
                 Cross[1,4,ipix] += sin(4psi)
                 Cross[2,4,ipix] += cos(4psi)
-
             end
         end
-        BEGIN = END + 1
+        BEGIN = END
         next!(p)
     end
     

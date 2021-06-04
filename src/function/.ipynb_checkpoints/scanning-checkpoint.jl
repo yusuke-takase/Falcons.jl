@@ -14,7 +14,7 @@ mutable struct ScanningStrategy
 end
 
 
-@inline function get_scan_tod(ScanningStrategyStructure, start::Int, stop::Int)
+@inline function get_pointings(ScanningStrategyStructure, start::Int, stop::Int)
     SSS = @views ScanningStrategyStructure
     nside = SSS.nside
     alpha = @views deg2rad(SSS.alpha)
@@ -27,8 +27,9 @@ end
     #= Compute the TOD of the hitpixel and the TOD of the detector orientation at a specified sampling rate from time start to stop. =#
     
     smp_rate = SSS.sampling_rate
-    loop_times = @views ((stop - start) * smp_rate)  + smp_rate
-    #pix_tod = @views zeros(Int32, loop_times, length(FP_theta))
+    time_array = @views Vector(start:1/smp_rate:stop-1/smp_rate)
+    loop_times = length(time_array)
+    
     psi_tod = @views zeros(Float32, loop_times, length(FP_theta))
     ang_tod = @views zeros(Float32, 2, loop_times, length(FP_theta))
     
@@ -55,7 +56,7 @@ end
     travel_direction_vec_0 = @views bore_0 × detector_vec_0
     travel_direction_0 = @views Quaternion(0.0, travel_direction_vec_0)
 
-    @views @inbounds @simd for j in eachindex(FP_theta)
+    @views @inbounds @simd for j = eachindex(FP_theta)
         #= 
         Generating the pointhing quaternion of other detectors in the focal plane 
         by adding an angular offset to the boresight based on the FP_theta and FP_phi information. 
@@ -64,8 +65,8 @@ end
         q_phi_in_FP = quaternion_rotator(deg2rad(FP_phi[j]), 1, bore_0)
         q_for_FP = q_phi_in_FP * q_theta_in_FP
         pointing = q_for_FP * boresight_0 / q_for_FP
-        @views @inbounds @threads for i = 1:loop_times
-            t = start + (i - 1) / smp_rate
+        @views @inbounds @threads for i = eachindex(time_array)
+            t = time_array[i]
             #= Generate the quaternion of revolution, precession, and spin at time t. =#
             q_revol = quaternion_rotator(omega_revol, t, z_axis)
             q_prec = quaternion_rotator(omega_prec, t, antisun_axis)
@@ -85,12 +86,12 @@ end
             The vector of meridians can be calculated by combining the outer product of pointing and z axis.
             =#
             longitude = pointing_t × (pointing_t × z_axis)
-            bore_ang = vec2ang_ver2(pointing_t[1], pointing_t[2], pointing_t[3])
+            ang_t = vec2ang_ver2(pointing_t[1], pointing_t[2], pointing_t[3])
 
-            ang_tod[1, i, j] = bore_ang[1]
-            ang_tod[2, i, j] = bore_ang[2]
+            ang_tod[1, i, j] = ang_t[1]
+            ang_tod[2, i, j] = ang_t[2]
             
-            #pix_tod[i, j] = ang2pixRing(resol, bore_ang[1], bore_ang[2])
+            #pix_tod[i, j] = ang2pixRing(resol, ang_t[1], ang_t[2])
             #pix_tod[i, j] = ang2pix(_m_, bore_ang[1], bore_ang[2])
             
             #=
@@ -108,10 +109,10 @@ end
             psi_tod[i, j] = acos(cosK) * sign(divergent_vec[3]) * sign(pointing_t[3])
         end
     end
-    return ang_tod[1,:,:], ang_tod[2,:,:], psi_tod
+    return ang_tod[1,:,:], ang_tod[2,:,:], psi_tod, time_array
 end
 
-@inline function get_scan_tod_pix(ScanningStrategyStructure, start::Int, stop::Int)
+@inline function get_pointing_pixels(ScanningStrategyStructure, start::Int, stop::Int)
     SSS = @views ScanningStrategyStructure
     nside = SSS.nside
     alpha = @views deg2rad(SSS.alpha)
@@ -124,8 +125,11 @@ end
     #= Compute the TOD of the hitpixel and the TOD of the detector orientation at a specified sampling rate from time start to stop. =#
     
     smp_rate = SSS.sampling_rate
-    loop_times = @views ((stop - start) * smp_rate)  + smp_rate
-    pix_tod = @views zeros(Int32, loop_times, length(FP_theta))
+    time_array = @views Vector(start:1/smp_rate:stop-1/smp_rate)
+    loop_times = length(time_array)
+    
+    
+    pix_tod = @views zeros(Int64, loop_times, length(FP_theta))
     psi_tod = @views zeros(Float32, loop_times, length(FP_theta))
     #ang_tod = @views zeros(Float32, 2, loop_times, length(FP_theta))
     
@@ -152,7 +156,7 @@ end
     travel_direction_vec_0 = @views bore_0 × detector_vec_0
     travel_direction_0 = @views Quaternion(0.0, travel_direction_vec_0)
 
-    @views @inbounds @simd for j in eachindex(FP_theta)
+    @views @inbounds @simd for j = eachindex(FP_theta)
         #= 
         Generating the pointhing quaternion of other detectors in the focal plane 
         by adding an angular offset to the boresight based on the FP_theta and FP_phi information. 
@@ -161,8 +165,9 @@ end
         q_phi_in_FP = quaternion_rotator(deg2rad(FP_phi[j]), 1, bore_0)
         q_for_FP = q_phi_in_FP * q_theta_in_FP
         pointing = q_for_FP * boresight_0 / q_for_FP
-        @views @inbounds @threads for i = 1:loop_times
-            t = start + (i - 1) / smp_rate
+        @views @inbounds @threads for i = eachindex(time_array)
+            
+            t = time_array[i]
             #= Generate the quaternion of revolution, precession, and spin at time t. =#
             q_revol = quaternion_rotator(omega_revol, t, z_axis)
             q_prec = quaternion_rotator(omega_prec, t, antisun_axis)
@@ -182,12 +187,12 @@ end
             The vector of meridians can be calculated by combining the outer product of pointing and z axis.
             =#
             longitude = pointing_t × (pointing_t × z_axis)
-            bore_ang = vec2ang_ver2(pointing_t[1], pointing_t[2], pointing_t[3])
+            ang_t = Float32.(vec2ang_ver2(pointing_t[1], pointing_t[2], pointing_t[3]))
 
-            #ang_tod[1, i, j] = bore_ang[1]
-            #ang_tod[2, i, j] = bore_ang[2]
+            #ang_tod[1, i, j] = ang_t[1]
+            #ang_tod[2, i, j] = ang_t[2]
             
-            pix_tod[i, j] = ang2pixRing(resol, bore_ang[1], bore_ang[2])
+            pix_tod[i, j] = ang2pixRing(resol, ang_t[1], ang_t[2])
             #pix_tod[i, j] = ang2pix(_m_, bore_ang[1], bore_ang[2])
             
             #=
@@ -205,5 +210,5 @@ end
             psi_tod[i, j] = acos(cosK) * sign(divergent_vec[3]) * sign(pointing_t[3])
         end
     end
-    return pix_tod, psi_tod
+    return pix_tod, psi_tod, time_array
 end
