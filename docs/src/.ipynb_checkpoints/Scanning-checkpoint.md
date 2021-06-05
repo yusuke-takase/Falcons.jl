@@ -43,11 +43,15 @@ The information about the orientation of a satellite at a certain time is called
 
 Once the scanning strategy is determined, computing the pointing is straightforward.
 ```julia
-theta_tod, phi_tod, psi_tod = get_pointings(ScanningStrategy(), start::Int, stop::Int)
+theta_tod, phi_tod, psi_tod, time_array = get_pointings(ScanningStrategy(), start::Int, stop::Int)
+pix_tod, psi_tod, time_array = get_pointing_pixels(ScanningStrategy(), start::Int, stop::Int)
 ```
 Enter an integer value for the time to be calculated in the `start` and `stop` fields.
 
-`theta_tod` and `phi_tod` contain the pointing data in chronological order, and `psi_tod` contains the scan angle according to the [COSMO(HEALPix)](https://lambda.gsfc.nasa.gov/product/about/pol_convention.cfm) definition.
+`theta_tod` and `phi_tod` contain the pointing data in chronological order, and `psi_tod` contains the scan angle according to the [COSMO(HEALPix)](https://lambda.gsfc.nasa.gov/product/about/pol_convention.cfm) definition. And `time_array` contains the time used in the calculation.
+
+`get_pointing_pixels()` does not allocate $\theta$ and $\phi$ arrays internally, but only allocates the minimum number of arrays needed to allocate the pixel TOD.
+Therefore, it runs faster than `get_pointings()`. In fact, `get_pointing_pixels()` is executed inside `ScanningStrategy2map()`.
 
 Now, the pointing TOD is calculated every month and stored in the map each time.
 ```julia
