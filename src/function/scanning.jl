@@ -16,7 +16,8 @@ end
 
 @inline function get_pointings(ScanningStrategyStructure, start::Int, stop::Int)
     SSS = @views ScanningStrategyStructure
-    nside = SSS.nside
+    resol = @views Resolution(SSS.nside)
+    
     alpha = @views deg2rad(SSS.alpha)
     beta = @views deg2rad(SSS.beta)
     FP_theta = SSS.FP_theta
@@ -25,15 +26,11 @@ end
     omega_prec = @views (2π / 60) / SSS.prec_period
     
     #= Compute the TOD of the hitpixel and the TOD of the detector orientation at a specified sampling rate from time start to stop. =#
-    
-    smp_rate = SSS.sampling_rate
-    time_array = @views Vector(start:1/smp_rate:stop-1/smp_rate)
+    time_array = @views Vector(start:1/SSS.sampling_rate:stop-1/SSS.sampling_rate)
     loop_times = length(time_array)
     
     psi_tod = @views zeros(Float32, loop_times, length(FP_theta))
     ang_tod = @views zeros(Float32, 2, loop_times, length(FP_theta))
-    
-    resol = @views Resolution(nside)
     
     antisun_axis = @views @SVector [1.0, 0.0, 0.0]
     spin_axis = @views @SVector [cos(alpha), 0.0, sin(alpha)]
@@ -114,7 +111,7 @@ end
 
 @inline function get_pointing_pixels(ScanningStrategyStructure, start::Int, stop::Int)
     SSS = @views ScanningStrategyStructure
-    nside = SSS.nside
+    resol = @views Resolution(SSS.nside)
     alpha = @views deg2rad(SSS.alpha)
     beta = @views deg2rad(SSS.beta)
     FP_theta = SSS.FP_theta
@@ -123,17 +120,12 @@ end
     omega_prec = @views (2π / 60) / SSS.prec_period
     
     #= Compute the TOD of the hitpixel and the TOD of the detector orientation at a specified sampling rate from time start to stop. =#
-    
-    smp_rate = SSS.sampling_rate
-    time_array = @views Vector(start:1/smp_rate:stop-1/smp_rate)
+    time_array = @views Vector(start:1/SSS.sampling_rate:stop-1/SSS.sampling_rate)
     loop_times = length(time_array)
-    
     
     pix_tod = @views zeros(Int64, loop_times, length(FP_theta))
     psi_tod = @views zeros(Float32, loop_times, length(FP_theta))
     #ang_tod = @views zeros(Float32, 2, loop_times, length(FP_theta))
-    
-    resol = @views Resolution(nside)
     
     antisun_axis = @views @SVector [1.0, 0.0, 0.0]
     spin_axis = @views @SVector [cos(alpha), 0.0, sin(alpha)]

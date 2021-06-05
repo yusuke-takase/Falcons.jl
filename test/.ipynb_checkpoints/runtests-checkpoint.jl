@@ -25,7 +25,7 @@ ss.start_point = "pole"
     println("Test ScanningStrategy ==> ", ss)
 end
 
-@testset "get_scan_tod-Test" begin    
+@testset "get_pointings-Test" begin    
     pix_tod, psi_tod = get_pointings(ss, 0, 30)
     @test typeof(pix_tod) <: Array
     @test typeof(psi_tod) <: Array
@@ -33,9 +33,9 @@ end
     @show psi_tod[1:10]
 end
 
-@testset "Mapmaking-Test" begin
+@testset "ScanningStrategy2map-Test" begin
     n = 6
-    outmap = Mapmaking(ss, n)
+    outmap = ScanningStrategy2map(ss, n)
     @test length(outmap[1]) == nside2npix(ss.nside)
     @test typeof(outmap[1]) <: Array
     @show outmap[1][1:5]
