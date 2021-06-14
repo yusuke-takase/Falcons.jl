@@ -2,15 +2,15 @@
 
 Mapmaking is available for computing hitmap and crosslink maps.
 ```julia
-ScanningStrategy2map(ScanningStrategy(), devide::Int)
+ScanningStrategy2map(ss::ScanningStrategy, devide::Int)
 ```
-This function splits the observation time specified by `ScanningStrategy()` by the number specified by `devide`, calculates the pointing TOD, and then creates a map using it.
+This function splits the observation time specified by `ScanningStrategy` by the number specified by `devide`, calculates the pointing TOD, and then creates a map using it.
 The reason for the split calculation is to avoid overloading the memory by calculating a huge amount of pointing TOD data at once.
 Inside this function, `get_pointing_pixels()` is being executed.
 
 For example,
 ```julia
-outmap = ScanningStrategy2map(ScanningStrategy(), 12)
+outmap = ScanningStrategy2map(ss::ScanningStrategy, 12)
 ```
 Now, the pointing TOD is calculated every month and stored in the map each time.
 

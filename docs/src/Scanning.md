@@ -2,53 +2,76 @@
 
 To define the scanning strategy for a satellite, set the `ScanningStrategy` structure.
 ```julia
-mutable struct ScanningStrategy
-    nside::Int
-    times::Int
-    sampling_rate::Int
-    alpha::AbstractFloat
-    beta::AbstractFloat
-    prec_period::AbstractFloat
-    spin_rpm::AbstractFloat
-    hwp_rpm::AbstractFloat
-    FP_theta::AbstractArray{AbstractFloat,1}
-    FP_phi::AbstractArray{AbstractFloat,1}
-    start_point::AbstractString
-    ScanningStrategy() = new()
+mutable struct ScanningStrategy{T<:AbstractFloat, I<:Int, AA<:AbstractArray{T}, AS<:AbstractString}
+    nside::I
+    times::I
+    sampling_rate::I
+    alpha::T
+    beta::T
+    prec_period::T
+    spin_rpm::T
+    hwp_rpm::T
+    FP_theta::AA
+    FP_phi::AA
+    start_point::AS
 end
 ```
 
 To set it up, define constructor `ss` as follows.
 ```julia
-ss = ScanningStrategy()
+nside = 128
+times = year #[sec]
+sampling_rate = 1 #[Hz]
+FP_theta = [0.0] #The angle with respect to the boresight, 0 degree represents the boresight.
+FP_phi = [0.0]
+alpha = 55.0 #[degree]
+beta = 60.0 #[degree]
+prec_period = 180.22 #[min]
+spin_rpm = 0.04 #[rpm]
+hwp_rpm = 0.05 #[rpm]
+start_point = "pole" #You can choose "pole" or "equator"
+
+ss = ScanningStrategy(
+    nside,
+    times,
+    sampling_rate,
+    alpha,
+    beta,
+    prec_period,
+    spin_rpm,
+    hwp_rpm,
+    FP_theta,
+    FP_phi,
+    start_point)
 ```
-You can assign a value to `ss` by accessing it as follows.
+Once the ss is set, the internal values can be accessed and modified as follows
+
 ```julia
-ss.nside = 128
-ss.times = year #[sec]
-ss.sampling_rate = 1 #[Hz]
-ss.FP_theta = [0.0] #The angle with respect to the boresight, 0 degree represents the boresight.
-ss.FP_phi = [0.0]
-ss.alpha = 55 #[degree]
-ss.beta = 60 #[degree]
-ss.prec_period = 180.22 #[min]
-ss.spin_rpm = 0.04 #[rpm]
-ss.hwp_rpm = 0.05 #[rpm]
-ss.start_point = "pole" #You can choose "pole" or "equator"
+@show ss.nside #You can see a value
+ss.nside = 256 #You can change a value
 ```
-No default values are set, so be sure to specify values for all variables by the user.
 
 ## Generate pointing TOD
 The information about the orientation of a satellite at a certain time is called pointing. The pointing is defined by $(\theta, \phi, \psi)$, where $\theta$ and $\phi$ are parameters of the 3D polar coordinates and $\psi$ is the angle between the scan direction and the meridian of the sky.
 
 Once the scanning strategy is determined, computing the pointing is straightforward.
 ```julia
-theta_tod, phi_tod, psi_tod, time_array = get_pointings(ScanningStrategy(), start::Int, stop::Int)
-pix_tod, psi_tod, time_array = get_pointing_pixels(ScanningStrategy(), start::Int, stop::Int)
+theta_tod, phi_tod, psi_tod, time_array = get_pointings(ss::ScanningStrategy, start::Int, stop::Int)
+pix_tod, psi_tod, time_array = get_pointing_pixels(ss::ScanningStrategy, start::Int, stop::Int)
 ```
 Enter an integer value for the time to be calculated in the `start` and `stop` fields.
 
 `theta_tod` and `phi_tod` contain the pointing data in chronological order, and `psi_tod` contains the scan angle according to the [COSMO(HEALPix)](https://lambda.gsfc.nasa.gov/product/about/pol_convention.cfm) definition. And `time_array` contains the time used in the calculation.
+
+The return values of these two functions are tuples, and can be combined into a single variable as an array, as shown below. In this case, the values will be stored in the following order.
+```julia
+pointing_TOD = get_pointings(ss::ScanningStrategy, start::Int, stop::Int)
+
+pointing_TOD[1]: theta_tod
+pointing_TOD[2]: phi_tod
+pointing_TOD[3]: psi_tod
+pointing_TOD[4]: time_array
+```
 
 `get_pointing_pixels()` does not allocate $\theta$ and $\phi$ arrays internally, but only allocates the minimum number of arrays needed to allocate the pixel TOD.
 Therefore, it runs faster than `get_pointings()`. In fact, `get_pointing_pixels()` is executed inside `ScanningStrategy2map()`.

@@ -1,51 +1,64 @@
-mutable struct ScanningStrategy
-    nside::Int
-    times::Int
-    sampling_rate::Int
-    alpha::AbstractFloat
-    beta::AbstractFloat
-    prec_period::AbstractFloat
-    spin_rpm::AbstractFloat
-    hwp_rpm::AbstractFloat
-    FP_theta::AbstractArray{AbstractFloat,1}
-    FP_phi::AbstractArray{AbstractFloat,1}
-    start_point::AbstractString
-    ScanningStrategy() = new()
+mutable struct ScanningStrategy{T<:AbstractFloat, I<:Int, AA<:AbstractArray{T}, AS<:AbstractString}
+    nside::I
+    times::I
+    sampling_rate::I
+    alpha::T
+    beta::T
+    prec_period::T
+    spin_rpm::T
+    hwp_rpm::T
+    FP_theta::AA
+    FP_phi::AA
+    start_point::AS
 end
 
+@inline function initial_pointings(ss::ScanningStrategy)
+    if ss.start_point =="pole"
+        #= Set the initial position of the boresight to near the zenith. =#
+        initial_vec = @views @SVector [sind(ss.alpha-ss.beta), 0, cosd(ss.alpha-ss.beta)]
+    end
+    if ss.start_point == "equator"
+        #= Set the initial position of the boresight to near the equator. =#
+        initial_vec = @views @SVector [cosd(ss.alpha-ss.beta), 0 , sind(ss.alpha-ss.beta)]
+    end
+    initial_vec
+end
 
-@inline function get_pointings(ScanningStrategyStructure, start::Int, stop::Int)
-    SSS = @views ScanningStrategyStructure
-    resol = @views Resolution(SSS.nside)
-    
-    alpha = @views deg2rad(SSS.alpha)
-    beta = @views deg2rad(SSS.beta)
-    FP_theta = SSS.FP_theta
-    FP_phi = SSS.FP_phi
-    omega_spin = @views (2π / 60) * SSS.spin_rpm
-    omega_prec = @views (2π / 60) / SSS.prec_period
+#=
+@inline function rotate_by_quarternion!(target_quart, quart1, quart2)
+    #q_theta_in_FP = quaternion_rotator(deg2rad(SS.FP_theta[j]), 1, y_axis)
+    #q_phi_in_FP = quaternion_rotator(deg2rad(SS.FP_phi[j]), 1, bore_0)
+    #q_for_FP = quart1 * quart1
+    return quart2 * quart1 * target_quart / quart1 / quart2
+end
+=#
+
+@inline function get_pointings(SS::ScanningStrategy, start::Int, stop::Int)
+    resol = Resolution(SS.nside)
+
+    omega_spin = (2π / 60) * SS.spin_rpm
+    omega_prec = (2π / 60) / SS.prec_period
+    omega_revol = (2π) / (60.0 * 60.0 * 24.0 * 365.25)
     
     #= Compute the TOD of the hitpixel and the TOD of the detector orientation at a specified sampling rate from time start to stop. =#
-    time_array = @views Vector(start:1/SSS.sampling_rate:stop-1/SSS.sampling_rate)
+    time_array = @views Vector(start:1/SS.sampling_rate:stop-1/SS.sampling_rate)
     loop_times = length(time_array)
     
-    psi_tod = @views zeros(Float32, loop_times, length(FP_theta))
-    ang_tod = @views zeros(Float32, 2, loop_times, length(FP_theta))
+    psi_tod = @views zeros(loop_times, length(SS.FP_theta))
+    theta_tod = @views zeros(loop_times, length(SS.FP_theta))
+    phi_tod = @views zeros(loop_times, length(SS.FP_theta))
+    
+    #psi_tod = @views zeros(Float32, loop_times, length(SS.FP_theta))
+    #ang_tod = @views zeros(Float32, 2, loop_times, length(SS.FP_theta))
     
     antisun_axis = @views @SVector [1.0, 0.0, 0.0]
-    spin_axis = @views @SVector [cos(alpha), 0.0, sin(alpha)]
     y_axis = @views @SVector [0.0, 1.0, 0.0]
     z_axis = @views @SVector [0.0, 0.0, 1.0]
-    omega_revol = @views (2π) / (60.0 * 60.0 * 24.0 * 365.25)
+    spin_axis = @views @SVector [cosd(SS.alpha), 0.0, sind(SS.alpha)]
     
-    if SSS.start_point =="pole"
-        #= Set the initial position of the boresight to near the zenith. =#
-        bore_0 = @views @SVector [sin(alpha-beta), 0, cos(alpha-beta)]
-    end
-    if SSS.start_point == "equator"
-        #= Set the initial position of the boresight to near the equator. =#
-        bore_0 = @views @SVector [cos(alpha-beta), 0 , sin(alpha-beta)]
-    end
+    
+    bore_0 = initial_pointings(SS)
+    
     #= Generate the quaternion at the initial position of the boresight and detector orientation. =#
     boresight_0 = @views Quaternion(0.0, bore_0)
     detector_vec_0 = @views @SVector [-boresight_0.q3, 0.0, boresight_0.q1]
@@ -53,17 +66,21 @@ end
     travel_direction_vec_0 = @views bore_0 × detector_vec_0
     travel_direction_0 = @views Quaternion(0.0, travel_direction_vec_0)
 
-    @views @inbounds @simd for j = eachindex(FP_theta)
+    @views @inbounds @simd for j = eachindex(SS.FP_theta)
         #= 
         Generating the pointhing quaternion of other detectors in the focal plane 
-        by adding an angular offset to the boresight based on the FP_theta and FP_phi information. 
+        by adding an angular offset to the boresight based on the SS.FP_theta and SS.FP_phi information. 
         =#
-        q_theta_in_FP = quaternion_rotator(deg2rad(FP_theta[j]), 1, y_axis)
-        q_phi_in_FP = quaternion_rotator(deg2rad(FP_phi[j]), 1, bore_0)
+        
+        q_theta_in_FP = quaternion_rotator(deg2rad(SS.FP_theta[j]), 1, y_axis)
+        q_phi_in_FP = quaternion_rotator(deg2rad(SS.FP_phi[j]), 1, bore_0)
         q_for_FP = q_phi_in_FP * q_theta_in_FP
         pointing = q_for_FP * boresight_0 / q_for_FP
+        
+        #pointing = @views rotate_by_quarternion!(boresight_0, quaternion_rotator(deg2rad(SS.FP_theta[j]), 1, y_axis), quaternion_rotator(deg2rad(SS.FP_phi[j]), 1, bore_0))
+        
         @views @inbounds @threads for i = eachindex(time_array)
-            t = time_array[i]
+            t = @views time_array[i]
             #= Generate the quaternion of revolution, precession, and spin at time t. =#
             q_revol = quaternion_rotator(omega_revol, t, z_axis)
             q_prec = quaternion_rotator(omega_prec, t, antisun_axis)
@@ -85,8 +102,8 @@ end
             longitude = pointing_t × (pointing_t × z_axis)
             ang_t = vec2ang_ver2(pointing_t[1], pointing_t[2], pointing_t[3])
 
-            ang_tod[1, i, j] = ang_t[1]
-            ang_tod[2, i, j] = ang_t[2]
+            theta_tod[i, j] = @views ang_t[1]
+            phi_tod[i, j] = @views ang_t[2]
             
             #pix_tod[i, j] = ang2pixRing(resol, ang_t[1], ang_t[2])
             #pix_tod[i, j] = ang2pix(_m_, bore_ang[1], bore_ang[2])
@@ -100,47 +117,38 @@ end
             #=
             An if statement to prevent errors due to rounding errors that may result in |cosK|>1
             =#
-            if abs(cosK) > 1.0
-                cosK = sign(cosK)
-            end
+            cosK = ifelse(abs(cosK) > 1.0, sign(cosK), cosK)
+            
             psi_tod[i, j] = acos(cosK) * sign(divergent_vec[3]) * sign(pointing_t[3])
         end
     end
-    return ang_tod[1,:,:], ang_tod[2,:,:], psi_tod, time_array
+    return (theta_tod, phi_tod, psi_tod, time_array)
 end
 
-@inline function get_pointing_pixels(ScanningStrategyStructure, start::Int, stop::Int)
-    SSS = @views ScanningStrategyStructure
-    resol = @views Resolution(SSS.nside)
-    alpha = @views deg2rad(SSS.alpha)
-    beta = @views deg2rad(SSS.beta)
-    FP_theta = SSS.FP_theta
-    FP_phi = SSS.FP_phi
-    omega_spin = @views (2π / 60) * SSS.spin_rpm
-    omega_prec = @views (2π / 60) / SSS.prec_period
+
+@inline function get_pointing_pixels(SS::ScanningStrategy, start::Int, stop::Int)
+    #SS = @views ScanningStrategyStructure
+    resol = @views Resolution(SS.nside)
+
+    omega_spin = @views (2π / 60) * SS.spin_rpm
+    omega_prec = @views (2π / 60) / SS.prec_period
+    omega_revol = @views (2π) / (60.0 * 60.0 * 24.0 * 365.25)
     
     #= Compute the TOD of the hitpixel and the TOD of the detector orientation at a specified sampling rate from time start to stop. =#
-    time_array = @views Vector(start:1/SSS.sampling_rate:stop-1/SSS.sampling_rate)
+    time_array = @views Vector(start:1/SS.sampling_rate:stop-1/SS.sampling_rate)
     loop_times = length(time_array)
     
-    pix_tod = @views zeros(Int64, loop_times, length(FP_theta))
-    psi_tod = @views zeros(Float32, loop_times, length(FP_theta))
+    pix_tod = @views zeros(Int64, loop_times, length(SS.FP_theta))
+    psi_tod = @views zeros(loop_times, length(SS.FP_theta))
     #ang_tod = @views zeros(Float32, 2, loop_times, length(FP_theta))
     
     antisun_axis = @views @SVector [1.0, 0.0, 0.0]
-    spin_axis = @views @SVector [cos(alpha), 0.0, sin(alpha)]
     y_axis = @views @SVector [0.0, 1.0, 0.0]
     z_axis = @views @SVector [0.0, 0.0, 1.0]
-    omega_revol = @views (2π) / (60.0 * 60.0 * 24.0 * 365.25)
+    spin_axis = @views @SVector [cosd(SS.alpha), 0.0, sind(SS.alpha)]
     
-    if SSS.start_point =="pole"
-        #= Set the initial position of the boresight to near the zenith. =#
-        bore_0 = @views @SVector [sin(alpha-beta), 0, cos(alpha-beta)]
-    end
-    if SSS.start_point == "equator"
-        #= Set the initial position of the boresight to near the equator. =#
-        bore_0 = @views @SVector [cos(alpha-beta), 0 , sin(alpha-beta)]
-    end
+    bore_0 = initial_pointings(SS)
+    
     #= Generate the quaternion at the initial position of the boresight and detector orientation. =#
     boresight_0 = @views Quaternion(0.0, bore_0)
     detector_vec_0 = @views @SVector [-boresight_0.q3, 0.0, boresight_0.q1]
@@ -148,18 +156,18 @@ end
     travel_direction_vec_0 = @views bore_0 × detector_vec_0
     travel_direction_0 = @views Quaternion(0.0, travel_direction_vec_0)
 
-    @views @inbounds @simd for j = eachindex(FP_theta)
+    @views @inbounds @simd for j = eachindex(SS.FP_theta)
         #= 
         Generating the pointhing quaternion of other detectors in the focal plane 
         by adding an angular offset to the boresight based on the FP_theta and FP_phi information. 
         =#
-        q_theta_in_FP = quaternion_rotator(deg2rad(FP_theta[j]), 1, y_axis)
-        q_phi_in_FP = quaternion_rotator(deg2rad(FP_phi[j]), 1, bore_0)
+        q_theta_in_FP = quaternion_rotator(deg2rad(SS.FP_theta[j]), 1, y_axis)
+        q_phi_in_FP = quaternion_rotator(deg2rad(SS.FP_phi[j]), 1, bore_0)
         q_for_FP = q_phi_in_FP * q_theta_in_FP
         pointing = q_for_FP * boresight_0 / q_for_FP
         @views @inbounds @threads for i = eachindex(time_array)
             
-            t = time_array[i]
+            t = @views time_array[i]
             #= Generate the quaternion of revolution, precession, and spin at time t. =#
             q_revol = quaternion_rotator(omega_revol, t, z_axis)
             q_prec = quaternion_rotator(omega_prec, t, antisun_axis)
@@ -179,7 +187,7 @@ end
             The vector of meridians can be calculated by combining the outer product of pointing and z axis.
             =#
             longitude = pointing_t × (pointing_t × z_axis)
-            ang_t = Float32.(vec2ang_ver2(pointing_t[1], pointing_t[2], pointing_t[3]))
+            ang_t = vec2ang_ver2(pointing_t[1], pointing_t[2], pointing_t[3])
 
             #ang_tod[1, i, j] = ang_t[1]
             #ang_tod[2, i, j] = ang_t[2]
@@ -196,11 +204,9 @@ end
             #=
             An if statement to prevent errors due to rounding errors that may result in |cosK|>1
             =#
-            if abs(cosK) > 1.0
-                cosK = sign(cosK)
-            end
+            cosK = ifelse(abs(cosK) > 1.0, sign(cosK), cosK)
             psi_tod[i, j] = acos(cosK) * sign(divergent_vec[3]) * sign(pointing_t[3])
         end
     end
-    return pix_tod, psi_tod, time_array
+    return (pix_tod, psi_tod, time_array)
 end

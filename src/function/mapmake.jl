@@ -21,22 +21,21 @@ function pixtod2hitmap(nside::Int, pixtod::Array{T}) where {T}
     return hit_map
 end
 
-function Mapmaking(ScanningStrategyStructure, split_num::Int)
-    SSS = @views ScanningStrategyStructure
-    resol = Resolution(SSS.nside)
-    npix = nside2npix(SSS.nside)
+function Mapmaking(SS::ScanningStrategy, split_num::Int)
+    resol = Resolution(SS.nside)
+    npix = nside2npix(SS.nside)
     
-    month = Int(SSS.times / split_num)
-    hwp_revol_rate = 2.0 * π * (SSS.hwp_rpm/ 60.0)
+    month = Int(SS.times / split_num)
+    hwp_revol_rate = 2.0 * π * (SS.hwp_rpm/ 60.0)
     
-    hit_map = zeros(Int64, npix)
-    Cross = zeros(Float32, (2,4, npix))
+    hit_map = zeros(npix)
+    Cross = zeros(2,4, npix)
     BEGIN = 0
     p = Progress(split_num)
     @views @inbounds for i = 1:split_num
         #println("process=", i, "/", split_num)
         END = i * month
-        theta_tod, phi_tod, psi_tod, time_array = get_pointings(SSS, BEGIN, END)
+        theta_tod, phi_tod, psi_tod, time_array = get_pointings(SS, BEGIN, END)
         #println("Start mapmaking!")
         
         @views @inbounds for j = eachindex(psi_tod[1,:])
@@ -75,21 +74,20 @@ function Mapmaking(ScanningStrategyStructure, split_num::Int)
 end
 
 
-function ScanningStrategy2map(ScanningStrategyStructure, split_num::Int)
-    SSS = @views ScanningStrategyStructure
-    resol = Resolution(SSS.nside)
-    npix = nside2npix(SSS.nside)
+function ScanningStrategy2map(SS::ScanningStrategy, split_num::Int)
+    resol = Resolution(SS.nside)
+    npix = nside2npix(SS.nside)
     
-    month = Int(SSS.times / split_num)
-    hwp_revol_rate = 2.0 * π * (SSS.hwp_rpm/ 60.0)
+    month = Int(SS.times / split_num)
+    hwp_revol_rate = 2.0 * π * (SS.hwp_rpm/ 60.0)
     
-    hit_map = zeros(Int64, npix)
-    Cross = zeros(Float32, (2,4, npix))
+    hit_map = zeros(npix)
+    Cross = zeros((2,4, npix))
     BEGIN = 0
     p = Progress(split_num)
     @views @inbounds for i = 1:split_num
         END = i * month
-        pix_tod, psi_tod, time_array = get_pointing_pixels(SSS, BEGIN, END)
+        pix_tod, psi_tod, time_array = get_pointing_pixels(SS, BEGIN, END)
         
         @views @inbounds for j = eachindex(psi_tod[1,:])
             pix_tod_jth_det = pix_tod[:,j]
