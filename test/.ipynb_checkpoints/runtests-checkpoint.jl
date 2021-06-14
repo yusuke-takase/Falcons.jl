@@ -6,18 +6,31 @@ day = 60 * 60 * 24
 year = day * 365
 prec1 = 60 * 60 * 3
 
-ss = ScanningStrategy()
-ss.nside = 128
-ss.times = year
-ss.sampling_rate = 2
-ss.FP_theta = [0.0]
-ss.FP_phi = [0.0]
-ss.alpha = 55
-ss.beta = 60
-ss.prec_period = 180.223
-ss.spin_rpm = 0.04
-ss.hwp_rpm = 0.05
-ss.start_point = "pole"
+
+nside = 128
+times = year #[sec]
+sampling_rate = 1 #[Hz]
+FP_theta = [0.0] #The angle with respect to the boresight, 0 degree represents the boresight.
+FP_phi = [0.0]
+alpha = 55.0 #[degree]
+beta = 60.0 #[degree]
+prec_period = 180.22 #[min]
+spin_rpm = 0.04 #[rpm]
+hwp_rpm = 0.05 #[rpm]
+start_point = "pole" #You can choose "pole" or "equator"
+
+ss = ScanningStrategy(
+    nside,
+    times,
+    sampling_rate,
+    alpha,
+    beta,
+    prec_period,
+    spin_rpm,
+    hwp_rpm,
+    FP_theta,
+    FP_phi,
+    start_point)
 
 @testset "ScanningStrategy_structure-Test" begin
     @test typeof(ss) <: ScanningStrategy
