@@ -26,7 +26,8 @@ function Mapmaking(SS::ScanningStrategy, split_num::Int)
     npix = nside2npix(SS.nside)
     
     month = Int(SS.times / split_num)
-    hwp_revol_rate = 2.0 * π * (SS.hwp_rpm/ 60.0)
+    ω_hwp = 2π * (SS.hwp_rpm / 60.0)
+
     
     hit_map = zeros(npix)
     Cross = zeros(2,4, npix)
@@ -41,22 +42,22 @@ function Mapmaking(SS::ScanningStrategy, split_num::Int)
         @views @inbounds for j = eachindex(psi_tod[1,:])
             theta_tod_jth_det = theta_tod[:,j]
             phi_tod_jth_det = phi_tod[:,j]
-            psi_tod_jth_det = psi_tod[:,j]
+            psi_tod_jth_det = ifelse(ω_hwp == 0.0, -psi_tod[:,j], psi_tod[:,j])
             @views @inbounds @simd for k = eachindex(psi_tod[:,1])
+                t = time_array[k]
                 ipix = ang2pixRing(resol, theta_tod_jth_det[k], phi_tod_jth_det[k])
                 psi = psi_tod_jth_det[k]
-                t = time_array[k]
-
+                hwp_ang = 4ω_hwp*t
+                
                 hit_map[ipix] += 1
-
-                Cross[1,1,ipix] += sin(psi)
-                Cross[2,1,ipix] += cos(psi)
-                Cross[1,2,ipix] += sin(2psi)
-                Cross[2,2,ipix] += cos(2psi)
-                Cross[1,3,ipix] += sin(3psi)
-                Cross[2,3,ipix] += cos(3psi)
-                Cross[1,4,ipix] += sin(4psi)
-                Cross[2,4,ipix] += cos(4psi)
+                Cross[1,1,ipix] += sin(hwp_ang - psi)
+                Cross[2,1,ipix] += cos(hwp_ang - psi)
+                Cross[1,2,ipix] += sin(hwp_ang - 2psi)
+                Cross[2,2,ipix] += cos(hwp_ang - 2psi)
+                Cross[1,3,ipix] += sin(hwp_ang - 3psi)
+                Cross[2,3,ipix] += cos(hwp_ang - 3psi)
+                Cross[1,4,ipix] += sin(hwp_ang - 4psi)
+                Cross[2,4,ipix] += cos(hwp_ang - 4psi)
 
             end
         end
@@ -74,12 +75,13 @@ function Mapmaking(SS::ScanningStrategy, split_num::Int)
 end
 
 
+
 function ScanningStrategy2map(SS::ScanningStrategy, split_num::Int)
     resol = Resolution(SS.nside)
     npix = nside2npix(SS.nside)
     
     month = Int(SS.times / split_num)
-    hwp_revol_rate = 2.0 * π * (SS.hwp_rpm/ 60.0)
+    ω_hwp = 2π * (SS.hwp_rpm / 60.0)
     
     hit_map = zeros(npix)
     Cross = zeros((2,4, npix))
@@ -91,22 +93,23 @@ function ScanningStrategy2map(SS::ScanningStrategy, split_num::Int)
         
         @views @inbounds for j = eachindex(psi_tod[1,:])
             pix_tod_jth_det = pix_tod[:,j]
-            psi_tod_jth_det = psi_tod[:,j]
+            #psi_tod_jth_det = psi_tod[:,j]
+            psi_tod_jth_det = ifelse(ω_hwp == 0.0, -psi_tod[:,j], psi_tod[:,j])
             @views @inbounds @simd for k = eachindex(psi_tod[:,1])
+                t = time_array[k]
                 ipix = pix_tod_jth_det[k]
                 psi = psi_tod_jth_det[k]
-                t = time_array[k]
-
+                hwp_ang = 4ω_hwp*t
+                
                 hit_map[ipix] += 1
-
-                Cross[1,1,ipix] += sin(psi)
-                Cross[2,1,ipix] += cos(psi)
-                Cross[1,2,ipix] += sin(2psi)
-                Cross[2,2,ipix] += cos(2psi)
-                Cross[1,3,ipix] += sin(3psi)
-                Cross[2,3,ipix] += cos(3psi)
-                Cross[1,4,ipix] += sin(4psi)
-                Cross[2,4,ipix] += cos(4psi)
+                Cross[1,1,ipix] += sin(hwp_ang - psi)
+                Cross[2,1,ipix] += cos(hwp_ang - psi)
+                Cross[1,2,ipix] += sin(hwp_ang - 2psi)
+                Cross[2,2,ipix] += cos(hwp_ang - 2psi)
+                Cross[1,3,ipix] += sin(hwp_ang - 3psi)
+                Cross[2,3,ipix] += cos(hwp_ang - 3psi)
+                Cross[1,4,ipix] += sin(hwp_ang - 4psi)
+                Cross[2,4,ipix] += cos(hwp_ang - 4psi)
             end
         end
         BEGIN = END
