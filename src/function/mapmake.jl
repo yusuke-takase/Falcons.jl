@@ -25,26 +25,22 @@ function Mapmaking(SS::ScanningStrategy, split_num::Int)
     resol = Resolution(SS.nside)
     npix = nside2npix(SS.nside)
     
-    month = Int(SS.times / split_num)
+    month = Int(SS.duration / split_num)
     ω_hwp = 2π * (SS.hwp_rpm / 60.0)
-
     
     hit_map = zeros(npix)
     Cross = zeros(2,4, npix)
     BEGIN = 0
     p = Progress(split_num)
     @views @inbounds for i = 1:split_num
-        #println("process=", i, "/", split_num)
         END = i * month
-        theta_tod, phi_tod, psi_tod, time_array = get_pointings(SS, BEGIN, END)
-        #println("Start mapmaking!")
-        
-        @views @inbounds for j = eachindex(psi_tod[1,:])
-            theta_tod_jth_det = theta_tod[:,j]
-            phi_tod_jth_det = phi_tod[:,j]
-            psi_tod_jth_det = ifelse(ω_hwp == 0.0, -psi_tod[:,j], psi_tod[:,j])
-            @views @inbounds @simd for k = eachindex(psi_tod[:,1])
-                t = time_array[k]
+        pointings = get_pointings(SS, BEGIN, END)
+        @inbounds for j = eachindex(pointings["psi"][1,:])
+            theta_tod_jth_det = @views pointings["theta"][:,j]
+            phi_tod_jth_det = @views pointings["phi"][:,j]
+            psi_tod_jth_det = @views ifelse(ω_hwp == 0.0, -pointings["psi"][:,j], pointings["psi"][:,j])
+            @views @inbounds @simd for k = eachindex(pointings["psi"][:,1])
+                t = @views pointings["time"][k]
                 ipix = ang2pixRing(resol, theta_tod_jth_det[k], phi_tod_jth_det[k])
                 psi = psi_tod_jth_det[k]
                 hwp_ang = 4ω_hwp*t
@@ -58,29 +54,24 @@ function Mapmaking(SS::ScanningStrategy, split_num::Int)
                 Cross[2,3,ipix] += cos(hwp_ang - 3psi)
                 Cross[1,4,ipix] += sin(hwp_ang - 4psi)
                 Cross[2,4,ipix] += cos(hwp_ang - 4psi)
-
             end
         end
         BEGIN = END
         next!(p)
     end
-    
     link1 = @views @. (Cross[1,1,:]/hit_map)^2 + (Cross[2,1,:]/hit_map)^2
     link2 = @views @. (Cross[1,2,:]/hit_map)^2 + (Cross[2,2,:]/hit_map)^2
     link3 = @views @. (Cross[1,3,:]/hit_map)^2 + (Cross[2,3,:]/hit_map)^2
     link4 = @views @. (Cross[1,4,:]/hit_map)^2 + (Cross[2,4,:]/hit_map)^2
     out_map = @views [hit_map, link1, link2, link3, link4]
-    
     return out_map
 end
-
-
 
 function ScanningStrategy2map(SS::ScanningStrategy, split_num::Int)
     resol = Resolution(SS.nside)
     npix = nside2npix(SS.nside)
     
-    month = Int(SS.times / split_num)
+    month = Int(SS.duration / split_num)
     ω_hwp = 2π * (SS.hwp_rpm / 60.0)
     
     hit_map = zeros(npix)
@@ -90,7 +81,6 @@ function ScanningStrategy2map(SS::ScanningStrategy, split_num::Int)
     @views @inbounds for i = 1:split_num
         END = i * month
         pix_tod, psi_tod, time_array = get_pointing_pixels(SS, BEGIN, END)
-        
         @views @inbounds for j = eachindex(psi_tod[1,:])
             pix_tod_jth_det = pix_tod[:,j]
             #psi_tod_jth_det = psi_tod[:,j]
@@ -115,13 +105,11 @@ function ScanningStrategy2map(SS::ScanningStrategy, split_num::Int)
         BEGIN = END
         next!(p)
     end
-    
     link1 = @views @. (Cross[1,1,:]/hit_map)^2 + (Cross[2,1,:]/hit_map)^2
     link2 = @views @. (Cross[1,2,:]/hit_map)^2 + (Cross[2,2,:]/hit_map)^2
     link3 = @views @. (Cross[1,3,:]/hit_map)^2 + (Cross[2,3,:]/hit_map)^2
     link4 = @views @. (Cross[1,4,:]/hit_map)^2 + (Cross[2,4,:]/hit_map)^2
     out_map = @views [hit_map, link1, link2, link3, link4]
-    
     return out_map
 end
 

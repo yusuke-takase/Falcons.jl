@@ -6,31 +6,7 @@ day = 60 * 60 * 24
 year = day * 365
 prec1 = 60 * 60 * 3
 
-
-nside = 128
-times = year #[sec]
-sampling_rate = 1 #[Hz]
-FP_theta = [0.0] #The angle with respect to the boresight, 0 degree represents the boresight.
-FP_phi = [0.0]
-alpha = 55.0 #[degree]
-beta = 60.0 #[degree]
-prec_period = 180.22 #[min]
-spin_rpm = 0.04 #[rpm]
-hwp_rpm = 0.05 #[rpm]
-start_point = "pole" #You can choose "pole" or "equator"
-
-ss = ScanningStrategy(
-    nside,
-    times,
-    sampling_rate,
-    alpha,
-    beta,
-    prec_period,
-    spin_rpm,
-    hwp_rpm,
-    FP_theta,
-    FP_phi,
-    start_point)
+ss = gen_ScanningStrategy(duration=year)
 
 @testset "ScanningStrategy_structure-Test" begin
     @test typeof(ss) <: ScanningStrategy
@@ -39,11 +15,13 @@ ss = ScanningStrategy(
 end
 
 @testset "get_pointings-Test" begin    
-    pix_tod, psi_tod = get_pointings(ss, 0, 30)
-    @test typeof(pix_tod) <: Array
-    @test typeof(psi_tod) <: Array
-    @show pix_tod[1:10]
-    @show psi_tod[1:10]
+    pointings = get_pointings(ss, 0, 30)
+    @test typeof(pointings["theta"]) <: Array
+    @test typeof(pointings["phi"]) <: Array
+    @test typeof(pointings["psi"]) <: Array
+    @show pointings["theta"][1:10]
+    @show pointings["phi"][1:10]
+    @show pointings["psi"][1:10]
 end
 
 @testset "ScanningStrategy2map-Test" begin

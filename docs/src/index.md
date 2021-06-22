@@ -1,7 +1,3 @@
-```@meta
-CurrentModule = Falcons
-```
-
 # Falcons
 This is the documentation of [Falcons](https://github.com/yusuke-takase/Falcons.jl)(Fast Algorithm for Locus Computing ON the Sky), a package for fast simulation of satellite observations.
 
@@ -19,7 +15,3 @@ Please refer to [here](https://github.com/yusuke-takase/Falcons.jl/tree/master/t
 
 ## Documentation
 The documentation was built using [Documenter.jl](https://github.com/JuliaDocs).
-
-```@autodocs
-Modules = [Falcons]
-```
