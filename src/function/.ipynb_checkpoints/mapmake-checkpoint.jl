@@ -26,7 +26,7 @@ function Mapmaking(SS::ScanningStrategy, split_num::Int)
     npix = nside2npix(SS.nside)
     
     month = Int(SS.duration / split_num)
-    ω_hwp = 2π * (SS.hwp_rpm / 60.0)
+    ω_hwp = rpm2angfreq(SS.hwp_rpm)
     
     hit_map = zeros(npix)
     Cross = zeros(2,4, npix)
@@ -72,7 +72,7 @@ function ScanningStrategy2map(SS::ScanningStrategy, split_num::Int)
     npix = nside2npix(SS.nside)
     
     month = Int(SS.duration / split_num)
-    ω_hwp = 2π * (SS.hwp_rpm / 60.0)
+    ω_hwp = rpm2angfreq(SS.hwp_rpm)
     
     hit_map = zeros(npix)
     Cross = zeros((2,4, npix))

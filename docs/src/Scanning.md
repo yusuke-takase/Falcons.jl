@@ -4,11 +4,11 @@ To define the scanning strategy for a satellite, set the `ScanningStrategy` stru
 ```julia
 mutable struct ScanningStrategy{T<:AbstractFloat, I<:Int, AA<:AbstractArray{T}, AS<:AbstractString}
     nside::I
-    times::I
+    duration::I
     sampling_rate::I
     alpha::T
     beta::T
-    prec_period::T
+    prec_rpm::T
     spin_rpm::T
     hwp_rpm::T
     FP_theta::AA
