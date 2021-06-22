@@ -21,18 +21,18 @@ function pixtod2hitmap(nside::Int, pixtod::Array{T}) where {T}
     return hit_map
 end
 
-function Mapmaking(SS::ScanningStrategy, split_num::Int)
+function Mapmaking(SS::ScanningStrategy, division::Int)
     resol = Resolution(SS.nside)
     npix = nside2npix(SS.nside)
     
-    month = Int(SS.duration / split_num)
+    month = Int(SS.duration / division)
     ω_hwp = rpm2angfreq(SS.hwp_rpm)
     
     hit_map = zeros(npix)
     Cross = zeros(2,4, npix)
     BEGIN = 0
-    p = Progress(split_num)
-    @views @inbounds for i = 1:split_num
+    p = Progress(division)
+    @views @inbounds for i = 1:division
         END = i * month
         pointings = get_pointings(SS, BEGIN, END)
         @inbounds for j = eachindex(pointings["psi"][1,:])
@@ -67,18 +67,18 @@ function Mapmaking(SS::ScanningStrategy, split_num::Int)
     return out_map
 end
 
-function ScanningStrategy2map(SS::ScanningStrategy, split_num::Int)
+function ScanningStrategy2map(SS::ScanningStrategy, division::Int)
     resol = Resolution(SS.nside)
     npix = nside2npix(SS.nside)
     
-    month = Int(SS.duration / split_num)
+    month = Int(SS.duration / division)
     ω_hwp = rpm2angfreq(SS.hwp_rpm)
     
     hit_map = zeros(npix)
     Cross = zeros((2,4, npix))
     BEGIN = 0
-    p = Progress(split_num)
-    @views @inbounds for i = 1:split_num
+    p = Progress(division)
+    @views @inbounds for i = 1:division
         END = i * month
         pix_tod, psi_tod, time_array = get_pointing_pixels(SS, BEGIN, END)
         @views @inbounds for j = eachindex(psi_tod[1,:])
