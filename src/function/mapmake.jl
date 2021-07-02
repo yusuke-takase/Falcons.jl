@@ -29,7 +29,7 @@ function Mapmaking(SS::ScanningStrategy, division::Int)
     ω_hwp = rpm2angfreq(SS.hwp_rpm)
     
     hit_map = zeros(npix)
-    Cross = zeros(2,4, npix)
+    Cross = zeros(npix, 4, 2)
     BEGIN = 0
     p = Progress(division)
     @views @inbounds for i = 1:division
@@ -46,23 +46,23 @@ function Mapmaking(SS::ScanningStrategy, division::Int)
                 hwp_ang = 4ω_hwp*t
                 
                 hit_map[ipix] += 1
-                Cross[1,1,ipix] += sin(hwp_ang - psi)
-                Cross[2,1,ipix] += cos(hwp_ang - psi)
-                Cross[1,2,ipix] += sin(hwp_ang - 2psi)
-                Cross[2,2,ipix] += cos(hwp_ang - 2psi)
-                Cross[1,3,ipix] += sin(hwp_ang - 3psi)
-                Cross[2,3,ipix] += cos(hwp_ang - 3psi)
-                Cross[1,4,ipix] += sin(hwp_ang - 4psi)
-                Cross[2,4,ipix] += cos(hwp_ang - 4psi)
+                Cross[ipix,1,1] += sin(hwp_ang - psi)
+                Cross[ipix,1,2] += cos(hwp_ang - psi)
+                Cross[ipix,2,1] += sin(hwp_ang - 2psi)
+                Cross[ipix,2,2] += cos(hwp_ang - 2psi)
+                Cross[ipix,3,1] += sin(hwp_ang - 3psi)
+                Cross[ipix,3,2] += cos(hwp_ang - 3psi)
+                Cross[ipix,4,1] += sin(hwp_ang - 4psi)
+                Cross[ipix,4,2] += cos(hwp_ang - 4psi)
             end
         end
         BEGIN = END
         next!(p)
     end
-    link1 = @views @. (Cross[1,1,:]/hit_map)^2 + (Cross[2,1,:]/hit_map)^2
-    link2 = @views @. (Cross[1,2,:]/hit_map)^2 + (Cross[2,2,:]/hit_map)^2
-    link3 = @views @. (Cross[1,3,:]/hit_map)^2 + (Cross[2,3,:]/hit_map)^2
-    link4 = @views @. (Cross[1,4,:]/hit_map)^2 + (Cross[2,4,:]/hit_map)^2
+    link1 = @views @. (Cross[:,1,1]/hit_map)^2 + (Cross[:,1,2]/hit_map)^2
+    link2 = @views @. (Cross[:,2,1]/hit_map)^2 + (Cross[:,2,2]/hit_map)^2
+    link3 = @views @. (Cross[:,3,1]/hit_map)^2 + (Cross[:,3,2]/hit_map)^2
+    link4 = @views @. (Cross[:,4,1]/hit_map)^2 + (Cross[:,4,2]/hit_map)^2
     out_map = @views [hit_map, link1, link2, link3, link4]
     return out_map
 end
@@ -75,7 +75,9 @@ function ScanningStrategy2map(SS::ScanningStrategy, division::Int)
     ω_hwp = rpm2angfreq(SS.hwp_rpm)
     
     hit_map = zeros(npix)
-    Cross = zeros((2,4, npix))
+    Cross = zeros(npix, 4, 2)
+    hit_matrix = zeros(npix, 3, 3)
+    detmap = zeros(npix)
     BEGIN = 0
     p = Progress(division)
     @views @inbounds for i = 1:division
@@ -92,24 +94,30 @@ function ScanningStrategy2map(SS::ScanningStrategy, division::Int)
                 hwp_ang = 4ω_hwp*t
                 
                 hit_map[ipix] += 1
-                Cross[1,1,ipix] += sin(hwp_ang - psi)
-                Cross[2,1,ipix] += cos(hwp_ang - psi)
-                Cross[1,2,ipix] += sin(hwp_ang - 2psi)
-                Cross[2,2,ipix] += cos(hwp_ang - 2psi)
-                Cross[1,3,ipix] += sin(hwp_ang - 3psi)
-                Cross[2,3,ipix] += cos(hwp_ang - 3psi)
-                Cross[1,4,ipix] += sin(hwp_ang - 4psi)
-                Cross[2,4,ipix] += cos(hwp_ang - 4psi)
+                Cross[ipix,1,1] += sin(hwp_ang - psi)
+                Cross[ipix,1,2] += cos(hwp_ang - psi)
+                Cross[ipix,2,1] += sin(hwp_ang - 2psi)
+                Cross[ipix,2,2] += cos(hwp_ang - 2psi)
+                Cross[ipix,3,1] += sin(hwp_ang - 3psi)
+                Cross[ipix,3,2] += cos(hwp_ang - 3psi)
+                Cross[ipix,4,1] += sin(hwp_ang - 4psi)
+                Cross[ipix,4,2] += cos(hwp_ang - 4psi)
+                hit_matrix[ipix,:,:] .+= HitMatrix(hwp_ang - 2psi)
             end
         end
         BEGIN = END
         next!(p)
     end
-    link1 = @views @. (Cross[1,1,:]/hit_map)^2 + (Cross[2,1,:]/hit_map)^2
-    link2 = @views @. (Cross[1,2,:]/hit_map)^2 + (Cross[2,2,:]/hit_map)^2
-    link3 = @views @. (Cross[1,3,:]/hit_map)^2 + (Cross[2,3,:]/hit_map)^2
-    link4 = @views @. (Cross[1,4,:]/hit_map)^2 + (Cross[2,4,:]/hit_map)^2
-    out_map = @views [hit_map, link1, link2, link3, link4]
+    #hitmat_ave = @views hit_matrix./hit_map
+    @views @inbounds @threads for i = 1:npix
+        detmap[i] = det((hit_matrix[i,:,:])./hit_map[i])
+        #detmap[i] = det(inv(hit_matrix[i,:,:]./hit_map[i]))
+    end
+    link1 = @views @. (Cross[:,1,1]/hit_map)^2 + (Cross[:,1,2]/hit_map)^2
+    link2 = @views @. (Cross[:,2,1]/hit_map)^2 + (Cross[:,2,2]/hit_map)^2
+    link3 = @views @. (Cross[:,3,1]/hit_map)^2 + (Cross[:,3,2]/hit_map)^2
+    link4 = @views @. (Cross[:,4,1]/hit_map)^2 + (Cross[:,4,2]/hit_map)^2
+    out_map = @views [hit_map, link1, link2, link3, link4, detmap]
     return out_map
 end
 
@@ -121,7 +129,9 @@ function TwoTelescopes_ScanningStrategy2map(SS1::ScanningStrategy, SS2::Scanning
     ω_hwp = rpm2angfreq(SS1.hwp_rpm)
     
     hit_map = zeros(npix)
-    Cross = zeros((2,4, npix))
+    Cross = zeros(npix, 4, 2)
+    hit_matrix = zeros(npix, 3, 3)
+    detmap = zeros(npix)
     BEGIN = 0
     p = Progress(division)
     @views @inbounds for i = 1:division
@@ -141,24 +151,30 @@ function TwoTelescopes_ScanningStrategy2map(SS1::ScanningStrategy, SS2::Scanning
                 hwp_ang = 4ω_hwp*t
                 
                 hit_map[ipix] += 1
-                Cross[1,1,ipix] += sin(hwp_ang - psi)
-                Cross[2,1,ipix] += cos(hwp_ang - psi)
-                Cross[1,2,ipix] += sin(hwp_ang - 2psi)
-                Cross[2,2,ipix] += cos(hwp_ang - 2psi)
-                Cross[1,3,ipix] += sin(hwp_ang - 3psi)
-                Cross[2,3,ipix] += cos(hwp_ang - 3psi)
-                Cross[1,4,ipix] += sin(hwp_ang - 4psi)
-                Cross[2,4,ipix] += cos(hwp_ang - 4psi)
+                Cross[ipix,1,1] += sin(hwp_ang - psi)
+                Cross[ipix,1,2] += cos(hwp_ang - psi)
+                Cross[ipix,2,1] += sin(hwp_ang - 2psi)
+                Cross[ipix,2,2] += cos(hwp_ang - 2psi)
+                Cross[ipix,3,1] += sin(hwp_ang - 3psi)
+                Cross[ipix,3,2] += cos(hwp_ang - 3psi)
+                Cross[ipix,4,1] += sin(hwp_ang - 4psi)
+                Cross[ipix,4,2] += cos(hwp_ang - 4psi)
+                hit_matrix[ipix,:,:] .+= HitMatrix(hwp_ang - 2psi)
             end
         end
         BEGIN = END
         next!(p)
     end
-    link1 = @views @. (Cross[1,1,:]/hit_map)^2 + (Cross[2,1,:]/hit_map)^2
-    link2 = @views @. (Cross[1,2,:]/hit_map)^2 + (Cross[2,2,:]/hit_map)^2
-    link3 = @views @. (Cross[1,3,:]/hit_map)^2 + (Cross[2,3,:]/hit_map)^2
-    link4 = @views @. (Cross[1,4,:]/hit_map)^2 + (Cross[2,4,:]/hit_map)^2
-    out_map = @views [hit_map, link1, link2, link3, link4]
+    
+    @views @inbounds @threads for i = 1:npix
+        detmap[i] = det((hit_matrix[i,:,:])./hit_map[i])
+    end
+    link1 = @views @. (Cross[:,1,1]/hit_map)^2 + (Cross[:,1,2]/hit_map)^2
+    link2 = @views @. (Cross[:,2,1]/hit_map)^2 + (Cross[:,2,2]/hit_map)^2
+    link3 = @views @. (Cross[:,3,1]/hit_map)^2 + (Cross[:,3,2]/hit_map)^2
+    link4 = @views @. (Cross[:,4,1]/hit_map)^2 + (Cross[:,4,2]/hit_map)^2
+    out_map = @views [hit_map, link1, link2, link3, link4, detmap]
+    
     return out_map
 end
 
@@ -170,7 +186,9 @@ function ThreeTelescopes_ScanningStrategy2map(SS1::ScanningStrategy, SS2::Scanni
     ω_hwp = rpm2angfreq(SS1.hwp_rpm)
     
     hit_map = zeros(npix)
-    Cross = zeros((2,4, npix))
+    Cross = zeros(npix, 4, 2)
+    hit_matrix = zeros(npix, 3, 3)
+    detmap = zeros(npix)
     BEGIN = 0
     p = Progress(division)
     @views @inbounds for i = 1:division
@@ -191,24 +209,28 @@ function ThreeTelescopes_ScanningStrategy2map(SS1::ScanningStrategy, SS2::Scanni
                 hwp_ang = 4ω_hwp*t
                 
                 hit_map[ipix] += 1
-                Cross[1,1,ipix] += sin(hwp_ang - psi)
-                Cross[2,1,ipix] += cos(hwp_ang - psi)
-                Cross[1,2,ipix] += sin(hwp_ang - 2psi)
-                Cross[2,2,ipix] += cos(hwp_ang - 2psi)
-                Cross[1,3,ipix] += sin(hwp_ang - 3psi)
-                Cross[2,3,ipix] += cos(hwp_ang - 3psi)
-                Cross[1,4,ipix] += sin(hwp_ang - 4psi)
-                Cross[2,4,ipix] += cos(hwp_ang - 4psi)
+                Cross[ipix,1,1] += sin(hwp_ang - psi)
+                Cross[ipix,1,2] += cos(hwp_ang - psi)
+                Cross[ipix,2,1] += sin(hwp_ang - 2psi)
+                Cross[ipix,2,2] += cos(hwp_ang - 2psi)
+                Cross[ipix,3,1] += sin(hwp_ang - 3psi)
+                Cross[ipix,3,2] += cos(hwp_ang - 3psi)
+                Cross[ipix,4,1] += sin(hwp_ang - 4psi)
+                Cross[ipix,4,2] += cos(hwp_ang - 4psi)
+                hit_matrix[ipix,:,:] .+= HitMatrix(hwp_ang - 2psi)
             end
         end
         BEGIN = END
         next!(p)
     end
-    link1 = @views @. (Cross[1,1,:]/hit_map)^2 + (Cross[2,1,:]/hit_map)^2
-    link2 = @views @. (Cross[1,2,:]/hit_map)^2 + (Cross[2,2,:]/hit_map)^2
-    link3 = @views @. (Cross[1,3,:]/hit_map)^2 + (Cross[2,3,:]/hit_map)^2
-    link4 = @views @. (Cross[1,4,:]/hit_map)^2 + (Cross[2,4,:]/hit_map)^2
-    out_map = @views [hit_map, link1, link2, link3, link4]
+    @views @inbounds @threads for i = 1:npix
+        detmap[i] = det((hit_matrix[i,:,:])./hit_map[i])
+    end
+    link1 = @views @. (Cross[:,1,1]/hit_map)^2 + (Cross[:,1,2]/hit_map)^2
+    link2 = @views @. (Cross[:,2,1]/hit_map)^2 + (Cross[:,2,2]/hit_map)^2
+    link3 = @views @. (Cross[:,3,1]/hit_map)^2 + (Cross[:,3,2]/hit_map)^2
+    link4 = @views @. (Cross[:,4,1]/hit_map)^2 + (Cross[:,4,2]/hit_map)^2
+    out_map = @views [hit_map, link1, link2, link3, link4, detmap]
     return out_map
 end
 
@@ -218,3 +240,36 @@ function Genmap(map_array::Array)
     m.pixels .= map_array
     return m
 end
+
+@inline function Hᵢ(t)
+    ω_HWP = @views 2 * π * (46 / 60)
+    s = @views sin(4*ω_HWP*t)
+    c = @views cos(4*ω_HWP*t)
+    H = @views @SMatrix [
+        1 0  0
+        0 c  s
+        0 s -c
+    ]
+    return H
+end
+
+@inline function HitMatrix(rho)
+    s = sin(rho)
+    c = cos(rho)
+    D = @views (1/1).* @SMatrix [
+        1 c   s
+        c c^2 s*c
+        s s*c s^2
+    ]
+    return D
+end
+
+@inline function pᵢ(pix_i, psi, t, obsmap)
+    _wᵢ(psi) = @SMatrix [1.0/2.0; cos(2psi) / 2.0; sin(2psi) / 2.0]
+    I = @views obsmap[1,:]
+    Q = @views obsmap[2,:]
+    U = @views obsmap[3,:]
+    return _wᵢ(psi)' * (Hᵢ(t) * [I[pix_i]; Q[pix_i]; U[pix_i]])
+end
+
+_wᵢ(psi) = @SMatrix [1.0/2.0; cos(2psi) / 2.0; sin(2psi) / 2.0]
