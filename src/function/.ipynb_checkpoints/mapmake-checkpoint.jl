@@ -155,7 +155,7 @@ function get_psiDataBase(SS::ScanningStrategy,; division::Int, idx, map_div)
                 t = time_array[k]
                 ipix = pix_tod_jth_det[k]
                 psi = psi_tod_jth_det[k]
-                hwp_ang = 4ω_hwp*t
+                #hwp_ang = 4ω_hwp*t
                 #hit_map[ipix] += 1
                 if under < ipix <= upper
                     push!(psi_db[ipix-under], psi)
