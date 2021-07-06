@@ -121,6 +121,53 @@ function ScanningStrategy2map(SS::ScanningStrategy, division::Int)
     return out_map
 end
 
+function get_psiDataBase(SS::ScanningStrategy,; division::Int, idx, map_div)
+    #=
+    divisionはtodの分割計算
+    idxはマップ(npix)をRingOrderでmap_div*nside個の領域に分割したときに北極から順に貼られるインデックス
+    map_divはマップをmap_div*nside個に分割するためのパラメータ(4くらいがいい)
+    =#
+    
+    resol = Resolution(SS.nside)
+    npix = nside2npix(SS.nside)
+    map_division = map_div*SS.nside
+    println("To get a psi database in full-sky, specify idx in the range of [1, $map_division] and run the job.")
+    
+    split = npix/map_division
+    month = Int(SS.duration / division)
+    ω_hwp = rpm2angfreq(SS.hwp_rpm)
+    #hit_map = zeros(npix)
+    
+    psi_db = [Float64[] for i in 1:split]
+    under = Int(split*(idx-1))
+    upper = Int(split*idx)
+    println("ipix_range = [$(under+1),$upper]")
+    
+    BEGIN = 0
+    p = Progress(division)
+    @views @inbounds for i = 1:division
+        END = i * month
+        pix_tod, psi_tod, time_array = get_pointing_pixels(SS, BEGIN, END)
+        @views @inbounds for j = eachindex(psi_tod[1,:])
+            pix_tod_jth_det = pix_tod[:,j]
+            psi_tod_jth_det = ifelse(ω_hwp == 0.0, -psi_tod[:,j], psi_tod[:,j])
+            @views @inbounds @simd for k = eachindex(psi_tod[:,1])
+                t = time_array[k]
+                ipix = pix_tod_jth_det[k]
+                psi = psi_tod_jth_det[k]
+                hwp_ang = 4ω_hwp*t
+                #hit_map[ipix] += 1
+                if under < ipix <= upper
+                    push!(psi_db[ipix-under], psi)
+                end
+            end
+        end
+        BEGIN = END
+        next!(p)
+    end
+    return psi_db
+end
+
 function TwoTelescopes_ScanningStrategy2map(SS1::ScanningStrategy, SS2::ScanningStrategy, division::Int)
     resol = Resolution(SS1.nside)
     npix = nside2npix(SS1.nside)
