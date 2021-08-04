@@ -15,7 +15,7 @@ end
 rpm2angfreq(rpm) = (2.0π / 60.0) * rpm
 period2rpm(period) = 1.0 / period
 
-function gen_ScanningStrategy(;nside=128, duration=60*60*24*365, sampling_rate=1, alpha=45, beta=50, prec_rpm=0.005, spin_rpm=0.01, hwp_rpm=0, FP_theta=[0.0], FP_phi=[0.0], start_point="equator")
+function gen_ScanningStrategy(;nside=128, duration=60*60*24*365, sampling_rate=1, alpha=45, beta=50, prec_rpm=period2rpm(192.348), spin_rpm=0.05, hwp_rpm=0, FP_theta=[0.0], FP_phi=[0.0], start_point="equator")
     scanning_strategy_structure = ScanningStrategy(nside,
         duration,
         sampling_rate,

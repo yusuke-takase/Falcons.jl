@@ -106,7 +106,7 @@ function get_psiDataBase(SS::ScanningStrategy,; division::Int, idx, map_div)
         BEGIN = END
         next!(p)
     end
-    return psi_db
+    return (map_div, idx, psi_db)
 end
 
 function TwoTelescopes_ScanningStrategy2map(SS1::ScanningStrategy, SS2::ScanningStrategy, division::Int)
