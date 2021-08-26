@@ -88,12 +88,12 @@ end
 @inline function HitMatrix(rho)
     s = sin(rho)
     c = cos(rho)
-    D = @views (1/1).* @SMatrix [
+    W = @views (1/4).* @SMatrix [
         1 c   s
         c c^2 s*c
         s s*c s^2
     ]
-    return D
+    return W
 end
 
 @inline function pᵢ(pix_i, psi, t, obsmap)

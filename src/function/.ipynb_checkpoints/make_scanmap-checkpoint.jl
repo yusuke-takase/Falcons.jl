@@ -1,4 +1,8 @@
 function ScanningStrategy2MapInfo(SS::ScanningStrategy, division::Int)
+    """
+    Nonte:
+        This function assumed 2 detectors which is seeing same polarization angle.
+    """
     resol = Resolution(SS.nside)
     npix = nside2npix(SS.nside)
     
@@ -24,16 +28,16 @@ function ScanningStrategy2MapInfo(SS::ScanningStrategy, division::Int)
                 psi = psi_tod_jth_det[k]
                 hwp_ang = 4ω_hwp*t
                 
-                hit_map[ipix] += 1
-                Cross[ipix,1,1] += sin(hwp_ang - psi)
-                Cross[ipix,1,2] += cos(hwp_ang - psi)
-                Cross[ipix,2,1] += sin(hwp_ang - 2psi)
-                Cross[ipix,2,2] += cos(hwp_ang - 2psi)
-                Cross[ipix,3,1] += sin(hwp_ang - 3psi)
-                Cross[ipix,3,2] += cos(hwp_ang - 3psi)
-                Cross[ipix,4,1] += sin(hwp_ang - 4psi)
-                Cross[ipix,4,2] += cos(hwp_ang - 4psi)
-                hit_matrix[ipix,:,:] .+= HitMatrix(hwp_ang - 2psi)
+                hit_map[ipix] += 2 # Assumed 2 detectors
+                Cross[ipix,1,1] += 2sin(hwp_ang - psi) # Assumed 2 detectors
+                Cross[ipix,1,2] += 2cos(hwp_ang - psi)
+                Cross[ipix,2,1] += 2sin(hwp_ang - 2psi)
+                Cross[ipix,2,2] += 2cos(hwp_ang - 2psi)
+                Cross[ipix,3,1] += 2sin(hwp_ang - 3psi)
+                Cross[ipix,3,2] += 2cos(hwp_ang - 3psi)
+                Cross[ipix,4,1] += 2sin(hwp_ang - 4psi)
+                Cross[ipix,4,2] += 2cos(hwp_ang - 4psi)
+                hit_matrix[ipix,:,:] .+= 2HitMatrix(hwp_ang - 2psi)
             end
         end
         BEGIN = END
@@ -56,6 +60,7 @@ function ScanningStrategy2MapInfo(SS::ScanningStrategy, division::Int)
         "xl3" => link3,
         "xl4" => link4,
         "detM" => detmap,
+        "dI" => hit_matrix[:,1,1],
         "dQ" => hit_matrix[:,2,2],
         "dU" => hit_matrix[:,3,3]
         )
@@ -196,16 +201,16 @@ function TwoTelescopes_ScanningStrategy2MapInfo(SS1::ScanningStrategy, SS2::Scan
                 psi = psi_tod_jth_det[k]
                 hwp_ang = 4ω_hwp*t
                 
-                hit_map[ipix] += 1
-                Cross[ipix,1,1] += sin(hwp_ang - psi)
-                Cross[ipix,1,2] += cos(hwp_ang - psi)
-                Cross[ipix,2,1] += sin(hwp_ang - 2psi)
-                Cross[ipix,2,2] += cos(hwp_ang - 2psi)
-                Cross[ipix,3,1] += sin(hwp_ang - 3psi)
-                Cross[ipix,3,2] += cos(hwp_ang - 3psi)
-                Cross[ipix,4,1] += sin(hwp_ang - 4psi)
-                Cross[ipix,4,2] += cos(hwp_ang - 4psi)
-                hit_matrix[ipix,:,:] .+= HitMatrix(hwp_ang - 2psi)
+                hit_map[ipix] += 2
+                Cross[ipix,1,1] += 2sin(hwp_ang - psi)
+                Cross[ipix,1,2] += 2cos(hwp_ang - psi)
+                Cross[ipix,2,1] += 2sin(hwp_ang - 2psi)
+                Cross[ipix,2,2] += 2cos(hwp_ang - 2psi)
+                Cross[ipix,3,1] += 2sin(hwp_ang - 3psi)
+                Cross[ipix,3,2] += 2cos(hwp_ang - 3psi)
+                Cross[ipix,4,1] += 2sin(hwp_ang - 4psi)
+                Cross[ipix,4,2] += 2cos(hwp_ang - 4psi)
+                hit_matrix[ipix,:,:] .+= 2HitMatrix(hwp_ang - 2psi)
             end
         end
         BEGIN = END
@@ -228,6 +233,7 @@ function TwoTelescopes_ScanningStrategy2MapInfo(SS1::ScanningStrategy, SS2::Scan
         "xl3" => link3,
         "xl4" => link4,
         "detM" => detmap,
+        "dI" => hit_matrix[:,1,1],
         "dQ" => hit_matrix[:,2,2],
         "dU" => hit_matrix[:,3,3]
         )
