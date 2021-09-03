@@ -66,9 +66,9 @@ function ScanningStrategy2map(SS::ScanningStrategy, division::Int)
     return out_map
 end
 
-function Genmap(map_array::Array)
+function array2map(map_array::Array)
     nside = npix2nside(length(map_array))
-    m = Map{Float64, RingOrder}(nside)
+    m = HealpixMap{Float64, RingOrder}(nside)
     m.pixels .= map_array
     return m
 end
