@@ -1,5 +1,5 @@
 # Falcons
-<img src="https://user-images.githubusercontent.com/83496454/124602818-33cce180-dea4-11eb-9d76-73d0d0073d6c.png" width="200">
+<img src="https://user-images.githubusercontent.com/83496454/132130945-7d9cf95f-5a94-4fa9-b2c3-f9f9400d295d.png" width="300">
 
 [![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://yusuke-takase.github.io/Falcons.jl/stable)
 [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://yusuke-takase.github.io/Falcons.jl/dev)
