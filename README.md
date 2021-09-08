@@ -1,5 +1,5 @@
 # Falcons
-<img src="https://user-images.githubusercontent.com/83496454/132131844-f766cf9e-c951-4fcb-aa5a-7ab40cff73ca.png" width="600">
+<img src="https://user-images.githubusercontent.com/83496454/132532967-9c2f0e19-d920-4b94-863f-93236e093ff9.png" width="600">
 
 This logo was created with the help of our dear collaborator Jonathan Aumont and Léo Vacher. I would like to thank you from the bottom of my heart.
 
