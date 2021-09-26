@@ -14,6 +14,28 @@ ss = gen_ScanningStrategy(duration=year)
     println("Test ScanningStrategy ==> ", ss)
 end
 
+@testset "get_pointings_tuple-Test" begin    
+    pointings = get_pointings_tuple(ss, 0, 30)
+    @test typeof(pointings[1]) <: Array
+    @test typeof(pointings[2]) <: Array
+    @test typeof(pointings[3]) <: Array
+    @test typeof(pointings[4]) <: Array
+    @show pointings[1][1:10]
+    @show pointings[2][1:10]
+    @show pointings[3][1:10]
+    @show pointings[4][1:10]
+end
+
+@testset "get_pointing_pixels-Test" begin    
+    pointings = get_pointing_pixels(ss, 0, 30)
+    @test typeof(pointings[1]) <: Array
+    @test typeof(pointings[2]) <: Array
+    @test typeof(pointings[3]) <: Array
+    @show pointings[1][1:10]
+    @show pointings[2][1:10]
+    @show pointings[3][1:10]
+end
+
 @testset "get_pointings-Test" begin    
     pointings = get_pointings(ss, 0, 30)
     @test typeof(pointings["theta"]) <: Array
