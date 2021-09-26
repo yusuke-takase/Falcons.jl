@@ -43,11 +43,10 @@ function ScanningStrategy2MapInfo(SS::ScanningStrategy, division::Int)
         BEGIN = END
         next!(p)
     end
-    #hitmat_ave = @views hit_matrix./hit_map
-    @views @inbounds @threads for i = 1:npix
-        detmap[i] = det((hit_matrix[i,:,:])./hit_map[i])
-        hit_matrix[i,:,:] .= inv.(hit_matrix[i,:,:])
-        #detmap[i] = det(inv(hit_matrix[i,:,:]./hit_map[i]))
+    @views @inbounds @threads for i in eachindex(hit_map)
+        Inv_hitmat = inv.(hit_matrix[i,:,:])
+        hit_matrix[i,:,:] .= Inv_hitmat
+        detmap[i] = det(Inv_hitmat)./hit_map[i]
     end
     link1 = @views @. (Cross[:,1,1]/hit_map)^2 + (Cross[:,1,2]/hit_map)^2
     link2 = @views @. (Cross[:,2,1]/hit_map)^2 + (Cross[:,2,2]/hit_map)^2
