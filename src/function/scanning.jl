@@ -57,14 +57,14 @@ This function will return pointing tod as tuple.
     # Examples
     ```jldoctest
     julia> ss = gen_ScanningStrategy()
-    julia> pointings = get_pointing_tuple(s, 0, 100)
+    julia> pointings = get_pointings_tuple(s, 0, 100)
 
     # Returns
     ...
-    - `pointings[1]`: TOD of theta. shape:(time_step, numOfdet)
-    - `pointings[2]`: TOD of phi. shape:(time_step, numOfdet)
-    - `pointings[3]`: TOD of psi. shape:(time_step, numOfdet)
-    - `pointings[4]`: Array of time. shape:(time_step)
+    - `pointings[1]`: TOD of theta. shape:(duration*sampling_rate, numOfdet)
+    - `pointings[2]`: TOD of phi. shape:(duration*sampling_rate, numOfdet)
+    - `pointings[3]`: TOD of psi. shape:(duration*sampling_rate, numOfdet)
+    - `pointings[4]`: Array of time. shape:(duration*sampling_rate)
     ...
 """
 @inline function get_pointings_tuple(SS::ScanningStrategy, start, stop)
@@ -134,6 +134,29 @@ This function will return pointing tod as tuple.
     return (theta_tod, phi_tod, psi_tod, time_array)
 end
 
+"""
+    get_pointing_pixels(SS::ScanningStrategy, start, stop)
+
+This function will return pointing pixel tod as tuple.
+    # Arguments
+    ...
+    - `SS::ScanningStrategy`: the ScanningStrategy struct.
+    - `start::Int`: the initial time for pointing calculation.
+    - `stop::Int`: the finish time for pointing calculation.
+    ...
+
+    # Examples
+    ```jldoctest
+    julia> ss = gen_ScanningStrategy()
+    julia> pointings = get_pointing_pixels(s, 0, 100)
+
+    # Returns
+    ...
+    - `pointings[1]`: TOD of pixel indicies. shape:(duration*sampling_rate, numOfdet)
+    - `pointings[2]`: TOD of psi. shape:(duration*sampling_rate, numOfdet)
+    - `pointings[3]`: Array of time. shape:(duration*sampling_rate)
+    ...
+"""
 @inline function get_pointing_pixels(SS::ScanningStrategy, start, stop)
     theta_tod, phi_tod, psi_tod, time_array = get_pointings_tuple(SS, start, stop)
     loop_times = length(theta_tod[:,1])
@@ -149,6 +172,30 @@ end
     return (pix_tod, psi_tod, time_array)
 end
 
+"""
+    get_pointings(SS::ScanningStrategy, start, stop)
+
+This function will return pointing tod as dictionary type.
+    # Arguments
+    ...
+    - `SS::ScanningStrategy`: the ScanningStrategy struct.
+    - `start::Int`: the initial time for pointing calculation.
+    - `stop::Int`: the finish time for pointing calculation.
+    ...
+
+    # Examples
+    ```jldoctest
+    julia> ss = gen_ScanningStrategy()
+    julia> pointings = get_pointings(s, 0, 100)
+
+    # Returns
+    ...
+    - `pointings["theta"]`: TOD of theta. shape:(duration*sampling_rate, numOfdet)
+    - `pointings["phi"]`: TOD of phi. shape:(duration*sampling_rate, numOfdet)
+    - `pointings["psi"]`: TOD of psi. shape:(duration*sampling_rate, numOfdet)
+    - `pointings["time"]`: Array of time. shape:(duration*sampling_rate)
+    ...
+"""
 function get_pointings(SS::ScanningStrategy, start, stop)
     pointings = get_pointings_tuple(SS, start, stop)
     pointings = Dict{String,AbstractArray{Float64}}(
