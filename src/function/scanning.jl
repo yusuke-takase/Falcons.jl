@@ -15,6 +15,31 @@ end
 rpm2angfreq(rpm) = (2.0π / 60.0) * rpm
 period2rpm(period) = 1.0 / period
 
+
+"""
+    gen_ScanningStrategy(args***)
+
+This function generate scanning strategy.
+    # Arguments
+    ...
+    nside::Int
+    duration::Int
+    sampling_rate::Int
+    alpha::Float
+    beta::Float
+    prec_rpm::Float
+    spin_rpm::Float
+    hwp_rpm::Float
+    FP_theta::Array
+    FP_phi::Array
+    start_point::String
+    ...
+    
+    # Returns 
+    ...
+    - `scanning_strategy_structure`::ScanningStrategy
+    ...
+"""
 function gen_ScanningStrategy(;nside=128, duration=60*60*24*365, sampling_rate=1, alpha=45, beta=50, prec_rpm=period2rpm(192.348), spin_rpm=0.05, hwp_rpm=0, FP_theta=[0.0], FP_phi=[0.0], start_point="equator")
     scanning_strategy_structure = ScanningStrategy(nside,
         duration,
