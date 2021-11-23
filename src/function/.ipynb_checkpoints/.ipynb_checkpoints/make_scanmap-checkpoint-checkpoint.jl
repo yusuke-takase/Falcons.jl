@@ -81,6 +81,7 @@ function get_psiDataBase(SS::ScanningStrategy,; division::Int, idx, map_div)
     split = npix/map_division
     month = Int(SS.duration / division)
     ω_hwp = rpm2angfreq(SS.hwp_rpm)
+    #hit_map = zeros(npix)
     
     psi_db = [Float64[] for i in 1:split]
     under = Int(split*(idx-1))
@@ -97,9 +98,10 @@ function get_psiDataBase(SS::ScanningStrategy,; division::Int, idx, map_div)
             psi_tod_jth_det = ifelse(ω_hwp == 0.0, -psi_tod[:,j], psi_tod[:,j])
             @views @inbounds @simd for k = eachindex(psi_tod[:,1])
                 t = time_array[k]
-                ipix = pix_tod_jth_det[k] 
-                psi = 2ω_hwp*t - psi_tod_jth_det[k]
-                
+                ipix = pix_tod_jth_det[k]
+                psi = psi_tod_jth_det[k]
+                #hwp_ang = 4ω_hwp*t
+                #hit_map[ipix] += 1
                 if under < ipix <= upper
                     push!(psi_db[ipix-under], psi)
                 end

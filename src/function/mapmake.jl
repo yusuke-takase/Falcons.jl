@@ -12,6 +12,22 @@ function angtod2hitmap(nside::Int, theta_tod::Array{T}, phi_tod::Array{T}) where
     return hit_map
 end
 
+function xyztod2hitmap(nside::Int, xyz_tod::Array{T}) where {T}
+    hit_map = zeros(Int64, nside2npix(nside))
+    resol = Resolution(nside)
+    for j in eachindex(xyz_tod[1,1,:])
+        x_tod_jth_det = @views xyz_tod[1,:,j]
+        y_tod_jth_det = @views xyz_tod[2,:,j]
+        z_tod_jth_det = @views xyz_tod[3,:,j]
+        @inbounds @simd for k = eachindex(xyz_tod[1,:,1])
+            ang = @views vec2ang(x_tod_jth_det[k], y_tod_jth_det[k], z_tod_jth_det[k])
+            ipix = @views ang2pixRing(resol, ang[1], ang[2])
+            hit_map[ipix] += 1
+        end
+    end
+    return hit_map
+end
+
 function pixtod2hitmap(nside::Int, pixtod::Array{T}) where {T}
     npix = nside2npix(nside)
     hit_map = zeros(Int64, npix)
