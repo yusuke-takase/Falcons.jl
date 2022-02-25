@@ -18,8 +18,6 @@ Since the user can specify the amount of memory to occupy according to the avail
 
 ![Figure](https://user-images.githubusercontent.com/83496454/155742440-294f6b97-1305-43ac-8d57-8534eeab7005.gif)
 
-This is how the sky is scanned by 607 detectors computed by Falcons.
-
 ## Installation
 From the Julia REPL, run
 
