@@ -14,7 +14,20 @@ mutable struct ScanningStrategy{T<:AbstractFloat, I<:Int, AA<:AbstractArray{T}, 
 end
 
 rpm2angfreq(rpm) = (2.0π / 60.0) * rpm
-period2rpm(period) = 1.0 / period
+#period2rpm(period) = 1.0 / period
+function period2rpm(period,; unit="min")
+    if unit == "min"
+        rpm = 1.0 / period
+    end
+    if unit == "sec"
+        rpm = 1.0 / (period/60.0)
+    end
+    if unit == "hour"
+        rpm = 1.0 / (period/60.0/60.0)
+    end
+    return rpm
+end
+    
 
 
 """
