@@ -1,7 +1,7 @@
 name = "Falcons"
 uuid = "eba0fb4b-2daf-4740-90d2-e5655143e0a0"
 authors = ["Yusuke Takase <takase_y@s.okayama-u.ac.jp>"]
-version = "0.1.6"
+version = "0.1.7"
 
 [deps]
 Healpix = "9f4e344d-96bc-545a-84a3-ae6b9e1b672b"
@@ -13,8 +13,8 @@ StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 [compat]
 Healpix = "2.3.0, 3"
 ProgressMeter = "1.6.2"
-ReferenceFrameRotations = "1.0"
-StaticArrays = "1.2.0"
+ReferenceFrameRotations = "1.0, 3"
+StaticArrays = "1.2"
 julia = "1.6"
 
 [extras]

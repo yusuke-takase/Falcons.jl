@@ -1,5 +1,7 @@
 # Falcons
-<img src="https://user-images.githubusercontent.com/83496454/124602818-33cce180-dea4-11eb-9d76-73d0d0073d6c.png" width="200">
+<img src="https://user-images.githubusercontent.com/83496454/132131844-f766cf9e-c951-4fcb-aa5a-7ab40cff73ca.png" width="600">
+
+This logo was created with the help of our dear collaborator Jonathan Aumont and Léo Vacher. I would like to thank you from the bottom of my heart.
 
 [![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://yusuke-takase.github.io/Falcons.jl/stable)
 [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://yusuke-takase.github.io/Falcons.jl/dev)

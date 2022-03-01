@@ -16,27 +16,10 @@ mutable struct ScanningStrategy{T<:AbstractFloat, I<:Int, AA<:AbstractArray{T}, 
     start_point::AS
 end
 ```
-
 You can generate `ScanningStrategy` structure using `gen_ScanningStrategy()` function.
 
-```julia
-ss = gen_ScanningStrategy()
-```
-The initial value of ss is automatically set to the following value.
-```julia
-ss.nside = 128,
-ss.duration = 31536000, #[sec.]
-ss.sampling_rate = 1, #[Hz]
-ss.alpha = 45.0, #[deg.]
-ss.beta = 50.0, #[deg.]
-ss.prec_rpm = 0.005, #[rpm]
-ss.spin_rpm = 0.01, #[rpm]
-ss.hwp_rpm = 0.0, #[rpm]
-ss.FP_theta = [0.0], #[deg.]
-ss.FP_phi[0.0], #[deg.]
-ss.start_point = "equator" #or "pole"
-```
-This initial value can be changed by specifying the `gen_ScanningStrategy()` argument when declaring ss like below.
+
+This initial value of component of `ScanningStrategy` can be changed by specifying the `gen_ScanningStrategy()` argument when declaring `ss` like below.
 ```julia
 ss = gen_ScanningStrategy(alpha=60, prec_rpm=0.001, sampling_rate=5)
 ```

@@ -1,22 +1,22 @@
 # Falcons
-<img src="https://user-images.githubusercontent.com/83496454/124602818-33cce180-dea4-11eb-9d76-73d0d0073d6c.png" width="200">
+<img src="https://user-images.githubusercontent.com/83496454/132532967-9c2f0e19-d920-4b94-863f-93236e093ff9.png" width="600">
+
+This logo was created with the help of our dear collaborator Jonathan Aumont. I would like to thank you from the bottom of my heart.
 
 [![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://yusuke-takase.github.io/Falcons.jl/stable)
 [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://yusuke-takase.github.io/Falcons.jl/dev)
 [![Build Status](https://travis-ci.com/yusuke-takase/Falcons.jl.svg?branch=master)](https://travis-ci.com/yusuke-takase/Falcons.jl)
 
-Welcome to Falcons(Fast Algorithm for Locus Computing ON the Sky).
+Welcome to Falcons(Framework for Astrophysical Locus Computing ON the Sky).
 Falcons is a software that rapidly calculates the TOD(Time Ordered Data) of pointing information required for satellite observation simulations.
 
 It supports multi-detectors and can construct a focal plane by specifying (theta,phi) arrays centered on the boresight.
 The mapmaking function creates a hitmap and crosslink map from the rapidly obtained time series pointing information.
 
-Falcons is fast enough to run on a laptop, but can be easily used on a supercomputer. 
+Falcons is fast enough to run on a laptop, but can be easily used on a supercomputer.
 Since the user can specify the amount of memory to occupy according to the available memory on the node, it is very suitable for jobs that are submitted in large quantities.
 
-![Figure](https://user-images.githubusercontent.com/83496454/119337906-532ff680-bcca-11eb-9b8c-bde7a376c6e6.gif)
-
-This is how the sky is scanned by 607 detectors computed by Falcons.
+![Figure](https://user-images.githubusercontent.com/83496454/155742440-294f6b97-1305-43ac-8d57-8534eeab7005.gif)
 
 ## Installation
 From the Julia REPL, run

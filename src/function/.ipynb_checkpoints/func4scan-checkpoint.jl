@@ -11,3 +11,11 @@ end
     rot_ang = omega * t
     Quaternion(@SVector [cos(rot_ang/2.0), rotate_axis[1]*sin(rot_ang/2.0), rotate_axis[2]*sin(rot_ang/2.0), rotate_axis[3]*sin(rot_ang/2.0)])
 end
+
+@inline function vector_rotator(vec, rot_ang, rotate_axis)
+    #= Generate a quaternion that rotates by the angle omega*t around the rotate_axis axis. =#
+    q = Quaternion(@SVector [cos(rot_ang/2.0), rotate_axis[1]*sin(rot_ang/2.0), rotate_axis[2]*sin(rot_ang/2.0), rotate_axis[3]*sin(rot_ang/2.0)])
+    vec_q = Quaternion(0.0, vec)
+    rot_vec = q * vec_q / q
+    return @SVector [rot_vec.q1, rot_vec.q2, rot_vec.q3]
+end
