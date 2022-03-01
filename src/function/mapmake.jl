@@ -1,4 +1,4 @@
-function angtod2hitmap(nside, theta_tod, phi_tod)
+function angtod2hitmap(nside::Int, theta_tod::Array{T}, phi_tod::Array{T}) where {T}
     hit_map = zeros(Int64, nside2npix(nside))
     resol = Resolution(nside)
     for j in eachindex(theta_tod[1,:])
@@ -12,122 +12,112 @@ function angtod2hitmap(nside, theta_tod, phi_tod)
     return hit_map
 end
 
-function pixtod2hitmap(nside, pix)
-    npix = nside2npix(nside)
-    hit_map = zeros(Int64, npix)
-    for i = eachindex(pix)
-        hit_map[pix[i]] += 1
+function xyztod2hitmap(nside::Int, xyz_tod::Array{T}) where {T}
+    hit_map = zeros(Int64, nside2npix(nside))
+    resol = Resolution(nside)
+    for j in eachindex(xyz_tod[1,1,:])
+        x_tod_jth_det = @views xyz_tod[1,:,j]
+        y_tod_jth_det = @views xyz_tod[2,:,j]
+        z_tod_jth_det = @views xyz_tod[3,:,j]
+        @inbounds @simd for k = eachindex(xyz_tod[1,:,1])
+            ang = @views vec2ang(x_tod_jth_det[k], y_tod_jth_det[k], z_tod_jth_det[k])
+            ipix = @views ang2pixRing(resol, ang[1], ang[2])
+            hit_map[ipix] += 1
+        end
     end
     return hit_map
 end
 
-function Mapmaking(ScanningStrategyStructure, split_num)
-    SSS = @views ScanningStrategyStructure
-    resol = Resolution(SSS.nside)
-    npix = nside2npix(SSS.nside)
-    
-    month = Int(SSS.times / split_num)
-    hwp_revol_rate = 2.0 * π * (SSS.hwp_rpm/ 60.0)
-    
+function pixtod2hitmap(nside::Int, pixtod::Array{T}) where {T}
+    npix = nside2npix(nside)
     hit_map = zeros(Int64, npix)
-    Cross = zeros(Float32, (2,4, npix))
-    BEGIN = 0
-    p = Progress(split_num)
-    @views @inbounds @simd for i = 1:split_num
-        #println("process=", i, "/", split_num)
-        END = i * month
-        theta_tod, phi_tod, psi_tod = get_scan_tod(SSS, BEGIN, END)
-        #println("Start mapmaking!")
-        
-        @views @inbounds @simd for j = eachindex(psi_tod[1,:])
-            theta_tod_jth_det = theta_tod[:,j]
-            phi_tod_jth_det = phi_tod[:,j]
-            psi_tod_jth_det = psi_tod[:,j]
-            @views @inbounds @simd for k = eachindex(psi_tod[:,1])
-                ipix = ang2pixRing(resol, theta_tod_jth_det[k], phi_tod_jth_det[k])
-                psi = psi_tod_jth_det[k]
-                TIME = BEGIN + (k - 1) / SSS.sampling_rate
-
-                hit_map[ipix] += 1
-
-                Cross[1,1,ipix] += sin(psi)
-                Cross[2,1,ipix] += cos(psi)
-                Cross[1,2,ipix] += sin(2psi)
-                Cross[2,2,ipix] += cos(2psi)
-                Cross[1,3,ipix] += sin(3psi)
-                Cross[2,3,ipix] += cos(3psi)
-                Cross[1,4,ipix] += sin(4psi)
-                Cross[2,4,ipix] += cos(4psi)
-
-            end
-        end
-        BEGIN = END + 1
-        next!(p)
+    for i = eachindex(pixtod)
+        hit_map[pixtod[i]] += 1
     end
-    
-    link1 = @views @. (Cross[1,1,:]/hit_map)^2 + (Cross[2,1,:]/hit_map)^2
-    link2 = @views @. (Cross[1,2,:]/hit_map)^2 + (Cross[2,2,:]/hit_map)^2
-    link3 = @views @. (Cross[1,3,:]/hit_map)^2 + (Cross[2,3,:]/hit_map)^2
-    link4 = @views @. (Cross[1,4,:]/hit_map)^2 + (Cross[2,4,:]/hit_map)^2
-    out_map = @views [hit_map, link1, link2, link3, link4]
-    
-    return out_map
+    return hit_map
 end
 
-
-function ScanningStrategy2map(ScanningStrategyStructure, split_num)
-    SSS = @views ScanningStrategyStructure
-    resol = Resolution(SSS.nside)
-    npix = nside2npix(SSS.nside)
+function ScanningStrategy2map(SS::ScanningStrategy, division::Int)
+    resol = Resolution(SS.nside)
+    npix = nside2npix(SS.nside)
     
-    month = Int(SSS.times / split_num)
-    hwp_revol_rate = 2.0 * π * (SSS.hwp_rpm/ 60.0)
+    month = Int(SS.duration / division)
+    ω_hwp = rpm2angfreq(SS.hwp_rpm)
     
-    hit_map = zeros(Int64, npix)
-    Cross = zeros(Float32, (2,4, npix))
+    hit_map = zeros(npix)
+    Cross = zeros(npix, 4, 2)
     BEGIN = 0
-    p = Progress(split_num)
-    @inbounds @simd for i = 1:split_num
+    p = Progress(division)
+    @views @inbounds for i = 1:division
         END = i * month
-        pix_tod, psi_tod = get_scan_tod_pix(SSS, BEGIN, END)
-        
-        @views @inbounds @simd for j = eachindex(psi_tod[1,:])
+        pix_tod, psi_tod, time_array = get_pointing_pixels(SS, BEGIN, END)
+        @views @inbounds for j = eachindex(psi_tod[1,:])
             pix_tod_jth_det = pix_tod[:,j]
-            psi_tod_jth_det = psi_tod[:,j]
+            psi_tod_jth_det = ifelse(ω_hwp == 0.0, -psi_tod[:,j], psi_tod[:,j])
             @views @inbounds @simd for k = eachindex(psi_tod[:,1])
+                t = time_array[k]
                 ipix = pix_tod_jth_det[k]
                 psi = psi_tod_jth_det[k]
-                TIME = BEGIN + (k - 1) / SSS.sampling_rate
-
+                hwp_ang = 4ω_hwp*t
+                
                 hit_map[ipix] += 1
-
-                Cross[1,1,ipix] += sin(psi)
-                Cross[2,1,ipix] += cos(psi)
-                Cross[1,2,ipix] += sin(2psi)
-                Cross[2,2,ipix] += cos(2psi)
-                Cross[1,3,ipix] += sin(3psi)
-                Cross[2,3,ipix] += cos(3psi)
-                Cross[1,4,ipix] += sin(4psi)
-                Cross[2,4,ipix] += cos(4psi)
-
+                Cross[ipix,1,1] += sin(hwp_ang - psi)
+                Cross[ipix,1,2] += cos(hwp_ang - psi)
+                Cross[ipix,2,1] += sin(hwp_ang - 2psi)
+                Cross[ipix,2,2] += cos(hwp_ang - 2psi)
+                Cross[ipix,3,1] += sin(hwp_ang - 3psi)
+                Cross[ipix,3,2] += cos(hwp_ang - 3psi)
+                Cross[ipix,4,1] += sin(hwp_ang - 4psi)
+                Cross[ipix,4,2] += cos(hwp_ang - 4psi)
             end
         end
-        BEGIN = END + 1
+        BEGIN = END
         next!(p)
     end
-    
-    link1 = @views @. (Cross[1,1,:]/hit_map)^2 + (Cross[2,1,:]/hit_map)^2
-    link2 = @views @. (Cross[1,2,:]/hit_map)^2 + (Cross[2,2,:]/hit_map)^2
-    link3 = @views @. (Cross[1,3,:]/hit_map)^2 + (Cross[2,3,:]/hit_map)^2
-    link4 = @views @. (Cross[1,4,:]/hit_map)^2 + (Cross[2,4,:]/hit_map)^2
+    link1 = @views @. (Cross[:,1,1]/hit_map)^2 + (Cross[:,1,2]/hit_map)^2
+    link2 = @views @. (Cross[:,2,1]/hit_map)^2 + (Cross[:,2,2]/hit_map)^2
+    link3 = @views @. (Cross[:,3,1]/hit_map)^2 + (Cross[:,3,2]/hit_map)^2
+    link4 = @views @. (Cross[:,4,1]/hit_map)^2 + (Cross[:,4,2]/hit_map)^2
     out_map = @views [hit_map, link1, link2, link3, link4]
-    
     return out_map
 end
 
-function Genmap(map_array)
+function array2map(map_array::Array)
     nside = npix2nside(length(map_array))
-    m = Map{Float64, RingOrder}(nside)
+    m = HealpixMap{Float64, RingOrder}(nside)
     m.pixels .= map_array
     return m
 end
+
+@inline function Hᵢ(t)
+    ω_HWP = @views 2 * π * (46 / 60)
+    s = @views sin(4*ω_HWP*t)
+    c = @views cos(4*ω_HWP*t)
+    H = @views @SMatrix [
+        1 0  0
+        0 c  s
+        0 s -c
+    ]
+    return H
+end
+
+@inline function HitMatrix(rho)
+    s = sin(rho)
+    c = cos(rho)
+    W = @views (1/4).* @SMatrix [
+        1 c   s
+        c c^2 s*c
+        s s*c s^2
+    ]
+    return W
+end
+
+@inline function pᵢ(pix_i, psi, t, obsmap)
+    _wᵢ(psi) = @SMatrix [1.0/2.0; cos(2psi) / 2.0; sin(2psi) / 2.0]
+    I = @views obsmap[1,:]
+    Q = @views obsmap[2,:]
+    U = @views obsmap[3,:]
+    return _wᵢ(psi)' * (Hᵢ(t) * [I[pix_i]; Q[pix_i]; U[pix_i]])
+end
+
+_wᵢ(psi) = @SMatrix [1.0/2.0; cos(2psi) / 2.0; sin(2psi) / 2.0]

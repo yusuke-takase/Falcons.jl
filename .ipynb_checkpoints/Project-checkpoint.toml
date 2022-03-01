@@ -1,20 +1,21 @@
 name = "Falcons"
 uuid = "eba0fb4b-2daf-4740-90d2-e5655143e0a0"
 authors = ["Yusuke Takase <takase_y@s.okayama-u.ac.jp>"]
-version = "0.1.1"
-
-[compat]
-julia = "1.5"
-Healpix = "2.3.0"
-StaticArrays = "1.2.0"
-ReferenceFrameRotations = "1.0"
-
+version = "0.1.7"
 
 [deps]
 Healpix = "9f4e344d-96bc-545a-84a3-ae6b9e1b672b"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+ProgressMeter = "92933f4c-e287-5a05-a399-4b506db050ca"
 ReferenceFrameRotations = "74f56ac7-18b3-5285-802d-d4bd4f104033"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+
+[compat]
+Healpix = "2.3.0, 3.0.0"
+ReferenceFrameRotations = "1.0"
+StaticArrays = "1.2"
+ProgressMeter = "1.6.2"
+julia = "1.6"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"

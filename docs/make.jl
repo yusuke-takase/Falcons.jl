@@ -15,6 +15,8 @@ makedocs(;
     ),
     pages=[
         "Home" => "index.md",
+        "Scanning" => "Scanning.md",
+        "Mapmake" => "Mapmake.md",
     ],
 )
 
