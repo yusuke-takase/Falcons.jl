@@ -89,35 +89,32 @@ function array2map(map_array::Array)
     return m
 end
 
-@inline function Hᵢ(t)
-    ω_HWP = @views 2 * π * (46 / 60)
-    s = @views sin(4*ω_HWP*t)
-    c = @views cos(4*ω_HWP*t)
-    H = @views @SMatrix [
-        1 0  0
-        0 c  s
-        0 s -c
-    ]
-    return H
+function convert_maps(healpy_maps)
+    PolarizedHealpixMap{Float64,RingOrder}(
+        healpy_maps[1,:], 
+        healpy_maps[2,:], 
+        healpy_maps[3,:],
+    )
 end
 
-@inline function HitMatrix(rho)
-    s = sin(rho)
-    c = cos(rho)
-    W = @views (1/4).* @SMatrix [
-        1 c   s
-        c c^2 s*c
-        s s*c s^2
-    ]
-    return W
-end
 
-@inline function pᵢ(pix_i, psi, t, obsmap)
-    _wᵢ(psi) = @SMatrix [1.0/2.0; cos(2psi) / 2.0; sin(2psi) / 2.0]
-    I = @views obsmap[1,:]
-    Q = @views obsmap[2,:]
-    U = @views obsmap[3,:]
-    return _wᵢ(psi)' * (Hᵢ(t) * [I[pix_i]; Q[pix_i]; U[pix_i]])
+#=
+function signal(θ, ϕ, ψ, ipix, t, ω_HWP, sys::Systematics, ;interp=false)
+    if interp == false
+        power = w_μ(ψ)' * (H_μ(t, ω_HWP) * @SMatrix [sys.Inputmap.i[ipix]; sys.Inputmap.q[ipix]; sys.Inputmap.u[ipix]])
+    else
+        interp_I = Healpix.interpolate(sys.Inputmap.i, θ, ϕ)
+        interp_Q = Healpix.interpolate(sys.Inputmap.q, θ, ϕ)
+        interp_U = Healpix.interpolate(sys.Inputmap.u, θ, ϕ,)
+        power = w_μ(ψ)' * (H_μ(t, ω_HWP) * @SMatrix [interp_I; interp_Q; interp_U])
+    end
+    
+    if sys.Gain.offset != 0.0
+        power .+= sys.Gain.offset
+    end
+    
+    return power
 end
+=#
 
-_wᵢ(psi) = @SMatrix [1.0/2.0; cos(2psi) / 2.0; sin(2psi) / 2.0]
+

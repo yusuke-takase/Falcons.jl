@@ -344,6 +344,51 @@ function ThreeTelescopes_ScanningStrategy2map(SS1::ScanningStrategy, SS2::Scanni
     return out_map
 end
 
+function get_hn_map(SS::ScanningStrategy,; division::Int, nmax=5)
+    resol = Resolution(SS.nside)
+    npix = nside2npix(SS.nside)
+    
+    month = Int(SS.duration / division)
+    ω_hwp = rpm2angfreq(SS.hwp_rpm)
+    
+    hit_map = zeros(npix)
+    hₙ = zeros(Complex{Float64}, npix, nmax)
+    
+    BEGIN = 0
+    p = Progress(division)
+    @views @inbounds for i = 1:division
+        END = i * month
+        pix_tod, psi_tod, time_array = get_pointing_pixels(SS, BEGIN, END)
+        @views @inbounds for j = eachindex(psi_tod[1,:])
+            pix_tod_jth_det = pix_tod[:,j]
+            psi_tod_jth_det = psi_tod[:,j]
+            psi_tod_jth_det = ifelse(ω_hwp==0, -psi_tod[:,j], psi_tod[:,j])
+            @views @inbounds @simd for k = eachindex(psi_tod[:,1])
+                t = time_array[k]
+                ipix = pix_tod_jth_det[k]
+                psi = mod2pi(2*ω_hwp*t) - psi_tod_jth_det[k]
+                #psi = psi_tod_jth_det[k]
+                hit_map[ipix] += 1
+                @views @inbounds for n in 1:nmax
+                    hₙ[ipix, n] += cos(n*psi) + sin(n*psi)im
+                end
+            end
+        end
+        BEGIN = END
+        next!(p)
+    end
+    @views for n in 1:nmax
+        hₙ[:,n] ./= hit_map
+    end
+    
+    outmap = Dict{String, Array}(
+        "hitmap" => hit_map,
+        "h" => hₙ,
+        )
+    return outmap
+end
+
+#=
 function Mapmaking(SS::ScanningStrategy, division::Int)
     resol = Resolution(SS.nside)
     npix = nside2npix(SS.nside)
@@ -389,3 +434,4 @@ function Mapmaking(SS::ScanningStrategy, division::Int)
     out_map = @views [hit_map, link1, link2, link3, link4]
     return out_map
 end
+=#
