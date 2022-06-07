@@ -7,7 +7,7 @@ This logo was created with the help of our dear collaborator Jonathan Aumont. I 
 [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://yusuke-takase.github.io/Falcons.jl/dev)
 [![Build Status](https://travis-ci.com/yusuke-takase/Falcons.jl.svg?branch=master)](https://travis-ci.com/yusuke-takase/Falcons.jl)
 
-Welcome to Falcons(Fast Algorithm for Locus Computing ON the Sky).
+Welcome to Falcons(Framework for Astrophysical Locus Computing ON the Sky).
 Falcons is a software that rapidly calculates the TOD(Time Ordered Data) of pointing information required for satellite observation simulations.
 
 It supports multi-detectors and can construct a focal plane by specifying (theta,phi) arrays centered on the boresight.
