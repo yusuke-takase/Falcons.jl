@@ -9,9 +9,9 @@ using ProgressMeter
 
 include("./function/func4scan.jl")
 include("./function/scanning.jl")
-include("./function/systematics.jl")
 include("./function/mapmake.jl")
 include("./function/make_scanmap.jl")
+include("./function/systematics.jl")
 
 #include("./function/focalplane.jl")
 

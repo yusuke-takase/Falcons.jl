@@ -1,14 +1,12 @@
-using StaticArrays
-
-mutable struct SysPointing{AF<:AbstractFloat}
-    offset_ρ::AF
-    offset_χ::AF
-    disturbance::AF
+mutable struct SysPointing{T<:AbstractFloat, AA<:AbstractArray{T}}
+    offset_ρ::AA
+    offset_χ::AA
+    disturbance::AA
 end
 
-mutable struct SysGain{AF<:AbstractFloat}
-    offset::AF
-    disturbance::AF
+mutable struct SysGain{T<:AbstractFloat, AA<:AbstractArray{T}}
+    offset::AA
+    disturbance::AA
 end
 
 
@@ -24,11 +22,11 @@ end
 
 function set_input(;
         inputmap,
-        gain_offset = 0.0,
-        gain_disturbance = 0.0,
-        pointing_offset_rho = 0.0,
-        pointing_offset_chi = 0.0,
-        pointing_disturbance =0.0,
+        gain_offset = [0.0],
+        gain_disturbance = [0.0],
+        pointing_offset_rho = [0.0],
+        pointing_offset_chi = [0.0],
+        pointing_disturbance =　[0.0],
     )
     pointing = SysPointing(pointing_offset_rho, pointing_offset_chi, pointing_disturbance)
     gain = SysGain(gain_offset, gain_disturbance)
