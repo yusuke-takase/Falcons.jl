@@ -5,7 +5,7 @@ To define the scanning strategy for a satellite, set the `ScanningStrategy` stru
 mutable struct ScanningStrategy{T<:AbstractFloat, I<:Int, AA<:AbstractArray{T}, AS<:AbstractString}
     nside::I
     duration::I
-    sampling_rate::I
+    sampling_rate::T
     alpha::T
     beta::T
     prec_rpm::T
@@ -21,7 +21,7 @@ You can generate `ScanningStrategy` structure using `gen_ScanningStrategy()` fun
 
 This initial value of component of `ScanningStrategy` can be changed by specifying the `gen_ScanningStrategy()` argument when declaring `ss` like below.
 ```julia
-ss = gen_ScanningStrategy(alpha=60, prec_rpm=0.001, sampling_rate=5)
+ss = gen_ScanningStrategy(alpha=60, prec_rpm=0.001, sampling_rate=5.0)
 ```
 In addition, you can directly access ss and interactively change its value.
 ```julia
