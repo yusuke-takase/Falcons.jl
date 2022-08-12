@@ -11,7 +11,7 @@ ReferenceFrameRotations = "74f56ac7-18b3-5285-802d-d4bd4f104033"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
 [compat]
-Healpix = "2.3.0, 3.0.0"
+Healpix = "3.0.0,4.0.0"
 ReferenceFrameRotations = "1.0"
 StaticArrays = "1.2"
 ProgressMeter = "1.6.2"

@@ -7,17 +7,15 @@ using Base.Threads
 using StaticArrays
 using ProgressMeter
 
-include("./function/func4scan.jl")
 include("./function/scanning.jl")
+<<<<<<< HEAD
+=======
 include("./function/mapmake.jl")
 include("./function/make_scanmap.jl")
-#include("./function/focalplane.jl")
+>>>>>>> 5f71a0a80c3b7b30cc36ace051d5bafac9ded6f1
+include("./function/systematics.jl")
 
-export ScanningStrategy, gen_ScanningStrategy, get_pointings, get_pointing_pixels, period2rpm, get_pointings_xyz_tuple, get_pointings_tuple
-export TwoTelescopes_ScanningStrategy2map, TwoTelescopes_ScanningStrategy2MapInfo, ThreeTelescopes_ScanningStrategy2map
-export ScanningStrategy2map, Mapmaking, pixtod2hitmap, angtod2hitmap, array2map, xyztod2hitmap
-export get_psiDataBase, get_psi_time_DataBase, ScanningStrategy2MapInfo, rpm2angfreq
-#export lft_focalplane_configration, mft_focalplane_configration, hft_focalplane_configration, get_FP_each_freq
-#export pickup_wafer, pickup_freq, ang2xy, longitude2pix, ang2xy_projected_hft, ang2xy_projected_mft
+export ScanningStrategy, gen_ScanningStrategy, get_pointings, get_pointing_pixels, period2rpm, get_pointings_tuple, pixtod2hitmap, angtod2hitmap, convert_maps, rpm2angfreq
+export get_psiDataBase, get_psi_time_DataBase, ScanningStrategy2MapInfo, set_input, orientation_func, get_hn_map, ScanningStrategy2map
 
 end

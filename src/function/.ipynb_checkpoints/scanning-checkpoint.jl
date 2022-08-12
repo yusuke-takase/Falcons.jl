@@ -1,7 +1,29 @@
+@inline function vec2ang_ver2(x, y, z)
+    norm = sqrt(x^2 + y^2 + z^2)
+    theta = acos(z / norm)
+    phi = atan(y, x)
+    phi = ifelse(phi > π, π-phi, phi)
+    return (theta, phi)
+end
+
+
+@inline function quaternion_rotator(omega, t, rotate_axis)
+    #= Generate a quaternion that rotates by the angle omega*t around the rotate_axis axis. =#
+    rot_ang = omega * t
+    Quaternion([cos(rot_ang/2.0), rotate_axis[1]*sin(rot_ang/2.0), rotate_axis[2]*sin(rot_ang/2.0), rotate_axis[3]*sin(rot_ang/2.0)])
+end
+
+@inline function vector_rotator(vec, rot_ang, rotate_axis)
+    q = Quaternion([cos(rot_ang/2.0), rotate_axis[1]*sin(rot_ang/2.0), rotate_axis[2]*sin(rot_ang/2.0), rotate_axis[3]*sin(rot_ang/2.0)])
+    vec_q = Quaternion(0.0, vec)
+    rot_vec = q * vec_q / q
+    return vect(rot_vec)
+end
+
 mutable struct ScanningStrategy{T<:AbstractFloat, I<:Int, AA<:AbstractArray{T}, AS<:AbstractString}
     nside::I
     duration::I
-    sampling_rate::I
+    sampling_rate::T
     alpha::T
     beta::T
     prec_rpm::T
@@ -14,7 +36,7 @@ mutable struct ScanningStrategy{T<:AbstractFloat, I<:Int, AA<:AbstractArray{T}, 
 end
 
 rpm2angfreq(rpm) = (2.0π / 60.0) * rpm
-#period2rpm(period) = 1.0 / period
+
 function period2rpm(period,; unit="min")
     if unit == "min"
         rpm = 1.0 / period
@@ -56,7 +78,7 @@ This function generate scanning strategy.
     ...
 """
 function gen_ScanningStrategy(;
-        nside=128, duration=60*60*24*365, sampling_rate=1, alpha=45, beta=50, 
+        nside=128, duration=60*60*24*365, sampling_rate=1.0, alpha=45, beta=50, 
         prec_rpm=period2rpm(192.348), spin_rpm=0.05, hwp_rpm=0, 
         FP_theta=[0.0], FP_phi=[0.0], start_point="equator", start_angle=0.0)
     scanning_strategy_structure = ScanningStrategy(
@@ -76,43 +98,51 @@ function gen_ScanningStrategy(;
     return scanning_strategy_structure
 end
 
-@inline function initial_pointings_rot(ss::ScanningStrategy)
-    if ss.start_point =="pole"
-        #= Set the initial position of the boresight to near the zenith. =#
-        initial_vec = @views @SVector [sind(ss.alpha-ss.beta), 0, cosd(ss.alpha-ss.beta)]
-    end
+function initial_state(ss::ScanningStrategy)
+    ex = [1.0, 0.0, 0.0]
+    ey = [0.0, 1.0, 0.0]
+    ez = [0.0, 0.0, 1.0]
+    spin_axis = [cosd(ss.alpha), 0, sind(ss.alpha)]
+    b₀ = [cosd(ss.alpha+ss.beta), 0, sind(ss.alpha+ss.beta)]
+    anti_sun_axis = ex
+    
+    flip_angle = 0
+    scan_direction = 1
     if ss.start_point == "equator"
-        #= Set the initial position of the boresight to near the equator. =#
-        initial_vec = @views @SVector [cosd(ss.alpha-ss.beta), 0 , sind(ss.alpha-ss.beta)]
+        flip_angle = π
+        scan_direction = -1
     end
-    z_axis = [0, 0, 1]
-    bore_quat = Quaternion(0.0, initial_vec)
     
-    q = quaternion_rotator(ss.start_angle, 1.0, z_axis)
-    bore_quat_rot = q * bore_quat / q
+    b₀ = vector_rotator(b₀, flip_angle, spin_axis)
+    d₀ = vector_rotator(b₀, -π/2, ey)
+    u₀ = scan_direction *  b₀ × d₀
     
-    return @views @SVector [bore_quat_rot.q1, bore_quat_rot.q2, bore_quat_rot.q3]
-end
+    qb₀ = Quaternion(0.0, b₀)
+    qd₀ = Quaternion(0.0, d₀)
+    qu₀ = Quaternion(0.0, u₀)
+    qspin_axis = Quaternion(0.0, spin_axis)
+    qanti_sun_axis = Quaternion(0.0, anti_sun_axis)
 
-@inline function initial_pointings(ss::ScanningStrategy)
-    if ss.start_point == "pole"
-        #= Set the initial position of the boresight to near the zenith. =#
-        initial_vec = @views @SVector [sind(ss.alpha-ss.beta), 0, cosd(ss.alpha-ss.beta)]
-    end
-    if ss.start_point == "equator"
-        #= Set the initial position of the boresight to near the equator. =#
-        initial_vec = @views @SVector [cosd(ss.alpha-ss.beta), 0 , sind(ss.alpha-ss.beta)]
-    end
-    return initial_vec
+    q = quaternion_rotator(ss.start_angle, 1.0, ez)
+    qb₀ = q * qb₀ / q
+    qd₀ = q * qd₀ / q
+    qu₀ = q * qu₀ / q
+    qspin_axis = q * qspin_axis / q
+    qanti_sun_axis = q * qanti_sun_axis / q
+
+    spin_axis = vect(qspin_axis)
+    anti_sun_axis = vect(qanti_sun_axis)
+    
+    return (qb₀, qd₀, qu₀, spin_axis, anti_sun_axis)
 end
 
 """
-    get_pointings_tuple(SS::ScanningStrategy, start, stop)
+    get_pointings_tuple(ss::ScanningStrategy, start, stop)
 
 This function will return pointing tod as tuple.
     # Arguments
     ...
-    - `SS::ScanningStrategy`: the ScanningStrategy struct.
+    - `ss::ScanningStrategy`: the ScanningStrategy struct.
     - `start::Int`: the initial time for pointing calculation.
     - `stop::Int`: the finish time for pointing calculation.
     ...
@@ -130,161 +160,75 @@ This function will return pointing tod as tuple.
     - `pointings[4]`: Array of time. shape:(duration*sampling_rate)
     ...
 """
-@inline function get_pointings_tuple(SS::ScanningStrategy, start, stop)
-    resol = Resolution(SS.nside)
-    omega_spin = rpm2angfreq(SS.spin_rpm)
-    omega_prec = rpm2angfreq(SS.prec_rpm)
+function get_pointings_tuple(ss::ScanningStrategy, start, stop)
+    resol = Resolution(ss.nside)
+    omega_spin = rpm2angfreq(ss.spin_rpm)
+    omega_prec = rpm2angfreq(ss.prec_rpm)
     omega_revol = (2π) / (60.0 * 60.0 * 24.0 * 365.25)
-
-    #time_array = @views Vector(start:1/SS.sampling_rate:stop-1/SS.sampling_rate)
-    time_array = start:1/SS.sampling_rate:stop-1/SS.sampling_rate
+    time_array = start:1/ss.sampling_rate:stop-1/ss.sampling_rate |> LinRange
+    if start > stop-1/ss.sampling_rate
+        error("ERROR: \n The `start` time of the calculation is greater than or equal to the `stop` time.")
+    end
     loop_times = length(time_array)
-    numof_det = length(SS.FP_theta)
+    numof_det = length(ss.FP_theta)
 
     psi_tod = zeros(loop_times, numof_det)
     theta_tod = zeros(loop_times, numof_det)
     phi_tod = zeros(loop_times, numof_det)
     
-    antisun_axis = @SVector [1.0, 0.0, 0.0]
-    y_axis = @SVector [0.0, 1.0, 0.0]
-    z_axis = @SVector [0.0, 0.0, 1.0]
+    ey = @SVector [0.0, 1.0, 0.0]
+    ez = @SVector [0.0, 0.0, 1.0]
+
+    qb₀, qd₀, qu₀, spin_axis, antisun_axis = initial_state(ss)
     
-    antisun_axis = vector_rotator(antisun_axis, SS.start_angle, z_axis)
-    spin_axis = @SVector [cosd(SS.alpha), 0.0, sind(SS.alpha)]
-    spin_axis = vector_rotator(spin_axis, SS.start_angle, z_axis)
-    
-    #bore_0 = initial_pointings(SS)
-    bore_0 = initial_pointings_rot(SS)
-
-    boresight_0 = Quaternion(0.0, bore_0)
-    #detector_vec_0 = @SVector [-boresight_0.q3, 0.0, boresight_0.q1]
-    detector_vec_0 = @SVector [-boresight_0.q3, boresight_0.q2, boresight_0.q1]
-    detector_orientation_0 = Quaternion(0.0, detector_vec_0)
-    travel_direction_vec_0 = bore_0 × detector_vec_0
-    travel_direction_0 = Quaternion(0.0, travel_direction_vec_0)
-
-    @views @inbounds @simd for j = eachindex(SS.FP_theta)
-        q_theta_in_FP = quaternion_rotator(deg2rad(SS.FP_theta[j]), 1, y_axis)
-        q_phi_in_FP = quaternion_rotator(deg2rad(SS.FP_phi[j]), 1, bore_0)
-        q_for_FP = q_phi_in_FP * q_theta_in_FP
-        pointing = q_for_FP * boresight_0 / q_for_FP
-
+    @views @inbounds for j = eachindex(ss.FP_theta)
+        qtheta_in_FP = quaternion_rotator(deg2rad(ss.FP_theta[j]), 1, ey)
+        qphi_in_FP = quaternion_rotator(deg2rad(ss.FP_phi[j]), 1, vect(qb₀))
+        qfp = qphi_in_FP * qtheta_in_FP
+        qp₀ⱼ = qfp * qb₀ / qfp
         @views @inbounds @threads for i = eachindex(time_array)
             t = time_array[i]
-            q_revol = quaternion_rotator(omega_revol, t, z_axis)
-            q_prec = quaternion_rotator(omega_prec, t, antisun_axis)
-            q_spin = quaternion_rotator(omega_spin, t, spin_axis)
-            Q = q_revol * q_prec * q_spin
-            P = Q * pointing / Q
-            q_det = Q * detector_orientation_0 / Q
-            travel_direction = Q * travel_direction_0 / Q
-            pointing_t = @SVector [P.q1, P.q2, P.q3]
-            travel_direction_vec = @SVector [travel_direction.q1, travel_direction.q2, travel_direction.q3]
+            qᵣ = quaternion_rotator(omega_revol, t, ez)
+            qₚ = quaternion_rotator(omega_prec, t, antisun_axis)
+            qₛ = quaternion_rotator(omega_spin, t, spin_axis)
+            Q = qᵣ * qₚ * qₛ
+            qp = Q * qp₀ⱼ / Q
+            qu = Q * qu₀ / Q
+            
+            p = vect(qp)
+            u = vect(qu)
+            
+            ell = (p × ez) × p  
+            
+            θ, ϕ = vec2ang_ver2(p[1], p[2], p[3])
+            θ, ϕ = vec2ang(p[1], p[2], p[3])
 
-            longitude = pointing_t × (pointing_t × z_axis)
-            ang_t = vec2ang_ver2(pointing_t[1], pointing_t[2], pointing_t[3])
+            theta_tod[i, j] = θ
+            phi_tod[i, j] = ϕ
 
-            theta_tod[i, j] = ang_t[1]
-            phi_tod[i, j] = ang_t[2]
-
-            divergent_vec = longitude × travel_direction_vec
-            cosK = dot(travel_direction_vec, longitude) / (norm(travel_direction_vec) * norm(longitude))
-
-            cosK = ifelse(abs(cosK) > 1.0, sign(cosK), cosK)
-
-            divergent_vec3 = sign(divergent_vec[3])
-            divergent_vec3 = ifelse(divergent_vec3==0, -1, divergent_vec3)
-            pointing_t3 = sign(pointing_t[3])
-            pointing_t3 = ifelse(pointing_t3==0, 1, pointing_t3)
-
-            psi_tod[i, j] = acos(cosK) * divergent_vec3 * pointing_t3
+            k = ell × u
+            cosk = dot(u, ell) / (norm(u) * norm(ell))
+            cosk = ifelse(abs(cosk) > 1.0, sign(cosk), cosk)
+            
+            sign_kz = sign(k[3])
+            sign_kz = ifelse(sign_kz==0, -1, sign_kz)
+            sign_pz = sign(p[3])
+            sign_pz = ifelse(sign_pz==0, 1, sign_pz)
+            psi_tod[i, j] = acos(cosk) * sign_kz * sign_pz
         end
     end
     return (theta_tod, phi_tod, psi_tod, time_array)
 end
 
-@inline function get_pointings_xyz_tuple(SS::ScanningStrategy, start, stop)
-    resol = Resolution(SS.nside)
-    omega_spin = rpm2angfreq(SS.spin_rpm)
-    omega_prec = rpm2angfreq(SS.prec_rpm)
-    omega_revol = (2π) / (60.0 * 60.0 * 24.0 * 365.25)
-
-    #time_array = @views Vector(start:1/SS.sampling_rate:stop-1/SS.sampling_rate)
-    time_array = start:1/SS.sampling_rate:stop-1/SS.sampling_rate
-    loop_times = length(time_array)
-    numof_det = length(SS.FP_theta)
-
-    psi_tod = zeros(loop_times, numof_det)
-    #theta_tod = zeros(loop_times, numof_det)
-    #phi_tod = zeros(loop_times, numof_det)
-    xyz_tod = zeros(3, loop_times, numof_det)
     
-    antisun_axis = @SVector [1.0, 0.0, 0.0]
-    y_axis = @SVector [0.0, 1.0, 0.0]
-    z_axis = @SVector [0.0, 0.0, 1.0]
-    
-    antisun_axis = vector_rotator(antisun_axis, SS.start_angle, z_axis)
-    spin_axis = @SVector [cosd(SS.alpha), 0.0, sind(SS.alpha)]
-    spin_axis = vector_rotator(spin_axis, SS.start_angle, z_axis)
-    
-    #bore_0 = initial_pointings(SS)
-    bore_0 = initial_pointings_rot(SS)
-
-    boresight_0 = Quaternion(0.0, bore_0)
-    #detector_vec_0 = @SVector [-boresight_0.q3, 0.0, boresight_0.q1]
-    detector_vec_0 = @SVector [-boresight_0.q3, boresight_0.q2, boresight_0.q1]
-    detector_orientation_0 = Quaternion(0.0, detector_vec_0)
-    travel_direction_vec_0 = bore_0 × detector_vec_0
-    travel_direction_0 = Quaternion(0.0, travel_direction_vec_0)
-
-    @views @inbounds @simd for j = eachindex(SS.FP_theta)
-        q_theta_in_FP = quaternion_rotator(deg2rad(SS.FP_theta[j]), 1, y_axis)
-        q_phi_in_FP = quaternion_rotator(deg2rad(SS.FP_phi[j]), 1, bore_0)
-        q_for_FP = q_phi_in_FP * q_theta_in_FP
-        pointing = q_for_FP * boresight_0 / q_for_FP
-
-        @views @inbounds @threads for i = eachindex(time_array)
-            t = time_array[i]
-            q_revol = quaternion_rotator(omega_revol, t, z_axis)
-            q_prec = quaternion_rotator(omega_prec, t, antisun_axis)
-            q_spin = quaternion_rotator(omega_spin, t, spin_axis)
-            Q = q_revol * q_prec * q_spin
-            P = Q * pointing / Q
-            q_det = Q * detector_orientation_0 / Q
-            travel_direction = Q * travel_direction_0 / Q
-            pointing_t = @SVector [P.q1, P.q2, P.q3]
-            travel_direction_vec = @SVector [travel_direction.q1, travel_direction.q2, travel_direction.q3]
-
-            longitude = pointing_t × (pointing_t × z_axis)
-            ang_t = vec2ang_ver2(pointing_t[1], pointing_t[2], pointing_t[3])
-
-            #theta_tod[i, j] = ang_t[1]
-            #phi_tod[i, j] = ang_t[2]
-            xyz_tod[:, i, j] = pointing_t
-
-            divergent_vec = longitude × travel_direction_vec
-            cosK = dot(travel_direction_vec, longitude) / (norm(travel_direction_vec) * norm(longitude))
-
-            cosK = ifelse(abs(cosK) > 1.0, sign(cosK), cosK)
-
-            divergent_vec3 = sign(divergent_vec[3])
-            divergent_vec3 = ifelse(divergent_vec3==0, -1, divergent_vec3)
-            pointing_t3 = sign(pointing_t[3])
-            pointing_t3 = ifelse(pointing_t3==0, 1, pointing_t3)
-
-            psi_tod[i, j] = acos(cosK) * divergent_vec3 * pointing_t3
-        end
-    end
-    return (xyz_tod, psi_tod, time_array)
-end
 
 """
-    get_pointing_pixels(SS::ScanningStrategy, start, stop)
+    get_pointing_pixels(ss::ScanningStrategy, start, stop)
 
 This function will return pointing pixel tod as tuple.
     # Arguments
     ...
-    - `SS::ScanningStrategy`: the ScanningStrategy struct.
+    - `ss::ScanningStrategy`: the ScanningStrategy struct.
     - `start::Int`: the initial time for pointing calculation.
     - `stop::Int`: the finish time for pointing calculation.
     ...
@@ -301,11 +245,11 @@ This function will return pointing pixel tod as tuple.
     - `pointings[3]`: Array of time. shape:(duration*sampling_rate)
     ...
 """
-@inline function get_pointing_pixels(SS::ScanningStrategy, start, stop)
-    theta_tod, phi_tod, psi_tod, time_array = get_pointings_tuple(SS, start, stop)
+@inline function get_pointing_pixels(ss::ScanningStrategy, start, stop)
+    theta_tod, phi_tod, psi_tod, time_array = get_pointings_tuple(ss, start, stop)
     loop_times = length(theta_tod[:,1])
     numOfdet = length(theta_tod[1,:])
-    resol = Resolution(SS.nside)
+    resol = Resolution(ss.nside)
 
     pix_tod = @views zeros(Int64, loop_times, numOfdet)
     for j in eachindex(theta_tod[1,:])
@@ -317,12 +261,12 @@ This function will return pointing pixel tod as tuple.
 end
 
 """
-    get_pointings(SS::ScanningStrategy, start, stop)
+    get_pointings(ss::ScanningStrategy, start, stop)
 
 This function will return pointing tod as dictionary type.
     # Arguments
     ...
-    - `SS::ScanningStrategy`: the ScanningStrategy struct.
+    - `ss::ScanningStrategy`: the ScanningStrategy struct.
     - `start::Int`: the initial time for pointing calculation.
     - `stop::Int`: the finish time for pointing calculation.
     ...
@@ -340,8 +284,8 @@ This function will return pointing tod as dictionary type.
     - `pointings["time"]`: Array of time. shape:(duration*sampling_rate)
     ...
 """
-function get_pointings(SS::ScanningStrategy, start, stop)
-    pointings = get_pointings_tuple(SS, start, stop)
+function get_pointings(ss::ScanningStrategy, start, stop)
+    pointings = get_pointings_tuple(ss, start, stop)
     pointings = Dict{String,AbstractArray{Float64}}(
         "theta" => pointings[1],
         "phi" => pointings[2],
@@ -350,3 +294,44 @@ function get_pointings(SS::ScanningStrategy, start, stop)
     )
     return pointings
 end
+
+function ScanningStrategy2map(ss,; division, nmax=5)
+    outmap = get_hn_map(ss, division=division, nmax=nmax)
+    hmap = outmap["h"] .|> abs2
+    return (outmap["hitmap"], hmap)
+end
+
+function angtod2hitmap(nside::Int, theta_tod, phi_tod)
+    resol = Resolution(nside)
+    hit_map = zeros(resol.numOfPixels)
+    for j in eachindex(theta_tod[1,:])
+        theta_tod_jth_det = @views theta_tod[:,j]
+        phi_tod_jth_det = @views phi_tod[:,j]
+        @inbounds for k in eachindex(theta_tod[:,1])
+            ipix = @views ang2pixRing(resol, theta_tod_jth_det[k], phi_tod_jth_det[k])
+            hit_map[ipix] += 1
+        end
+    end
+    return hit_map
+end
+
+
+function pixtod2hitmap(nside::Int, pixtod)
+    resol = Resolution(nside)
+    hit_map = zeros(resol.numOfPixels)
+    for i in eachindex(pixtod)
+        hit_map[pixtod[i]] += 1
+    end
+    return hit_map
+end
+
+
+function convert_maps(healpy_maps)
+    PolarizedHealpixMap{Float64,RingOrder}(
+        healpy_maps[1,:], 
+        healpy_maps[2,:], 
+        healpy_maps[3,:],
+    )
+end
+
+
