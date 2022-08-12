@@ -11,14 +11,11 @@ ReferenceFrameRotations = "74f56ac7-18b3-5285-802d-d4bd4f104033"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
 [compat]
-<<<<<<< HEAD
 Healpix = "3.0.0,4.0.0"
 ReferenceFrameRotations = "1.0"
-=======
 Healpix = "2.3.0, 3, 4"
 ProgressMeter = "1.6"
 ReferenceFrameRotations = "1.0, 3"
->>>>>>> 43e2184c4080eb9673f65af4676d259bf9eb8bf4
 StaticArrays = "1.2"
 julia = "1.6"
 
