@@ -13,7 +13,6 @@ StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 [compat]
 Healpix = "3.0.0,4.0.0"
 ReferenceFrameRotations = "1.0"
-Healpix = "2.3.0, 3, 4"
 ProgressMeter = "1.6"
 ReferenceFrameRotations = "1.0, 3"
 StaticArrays = "1.2"
