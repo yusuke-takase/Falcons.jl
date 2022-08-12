@@ -4,11 +4,11 @@ To define the scanning strategy for a satellite, set the `ScanningStrategy` stru
 ```julia
 mutable struct ScanningStrategy{T<:AbstractFloat, I<:Int, AA<:AbstractArray{T}, AS<:AbstractString}
     nside::I
-    times::I
-    sampling_rate::I
+    duration::I
+    sampling_rate::T
     alpha::T
     beta::T
-    prec_period::T
+    prec_rpm::T
     spin_rpm::T
     hwp_rpm::T
     FP_theta::AA
@@ -16,29 +16,12 @@ mutable struct ScanningStrategy{T<:AbstractFloat, I<:Int, AA<:AbstractArray{T}, 
     start_point::AS
 end
 ```
-
 You can generate `ScanningStrategy` structure using `gen_ScanningStrategy()` function.
 
+
+This initial value of component of `ScanningStrategy` can be changed by specifying the `gen_ScanningStrategy()` argument when declaring `ss` like below.
 ```julia
-ss = gen_ScanningStrategy()
-```
-The initial value of ss is automatically set to the following value.
-```julia
-ss.nside = 128,
-ss.duration = 31536000, #[sec.]
-ss.sampling_rate = 1, #[Hz]
-ss.alpha = 45.0, #[deg.]
-ss.beta = 50.0, #[deg.]
-ss.prec_rpm = 0.005, #[rpm]
-ss.spin_rpm = 0.01, #[rpm]
-ss.hwp_rpm = 0.0, #[rpm]
-ss.FP_theta = [0.0], #[deg.]
-ss.FP_phi[0.0], #[deg.]
-ss.start_point = "equator" #or "pole"
-```
-This initial value can be changed by specifying the `gen_ScanningStrategy()` argument when declaring ss like below.
-```julia
-ss = gen_ScanningStrategy(alpha=60, prec_rpm=0.001, sampling_rate=5)
+ss = gen_ScanningStrategy(alpha=60, prec_rpm=0.001, sampling_rate=5.0)
 ```
 In addition, you can directly access ss and interactively change its value.
 ```julia
@@ -79,8 +62,5 @@ ss.FP_phi = [0.0, 90.0]
 In this operation, the first component of the array represents the center of the focal plane, i.e. the boresight. On the other hand, the second component represents the detector that observes a point in the sky 10 degrees in theta direction and 90 degrees in phi direction away from the boresight.
 
 If you want to build a focal plane, just substitute its configuration into these arrays and you will be able to compute multi-channel pointings.
-
-## Scanning strategy with half-wave plate
-
 
 
