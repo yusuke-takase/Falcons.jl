@@ -80,7 +80,7 @@ This function generate scanning strategy.
 function gen_ScanningStrategy(;
         nside=128, 
         duration=60*60*24*365, 
-        sampling_rate=1, 
+        sampling_rate=1.0,
         alpha=45, 
         beta=50, 
         prec_rpm=period2rpm(192.348), 
