@@ -8,8 +8,6 @@ using StaticArrays
 using ProgressMeter
 
 include("./function/scanning.jl")
-include("./function/mapmake.jl")
-include("./function/make_scanmap.jl")
 include("./function/systematics.jl")
 
 export ScanningStrategy, gen_ScanningStrategy, get_pointings, get_pointing_pixels, period2rpm, get_pointings_tuple, pixtod2hitmap, angtod2hitmap, convert_maps, rpm2angfreq
