@@ -78,14 +78,9 @@ This function generate scanning strategy.
     ...
 """
 function gen_ScanningStrategy(;
-<<<<<<< HEAD
-        nside=128, duration=60*60*24*365, sampling_rate=1.0, alpha=45, beta=50, 
-        prec_rpm=period2rpm(192.348), spin_rpm=0.05, hwp_rpm=0, 
-        FP_theta=[0.0], FP_phi=[0.0], start_point="equator", start_angle=0.0)
-=======
         nside=128, 
         duration=60*60*24*365, 
-        sampling_rate=1, 
+        sampling_rate=1.0,
         alpha=45, 
         beta=50, 
         prec_rpm=period2rpm(192.348), 
@@ -96,7 +91,6 @@ function gen_ScanningStrategy(;
         start_point="equator", 
         start_angle=0.0
     )
->>>>>>> 5f71a0a80c3b7b30cc36ace051d5bafac9ded6f1
     scanning_strategy_structure = ScanningStrategy(
         nside,
         duration,
