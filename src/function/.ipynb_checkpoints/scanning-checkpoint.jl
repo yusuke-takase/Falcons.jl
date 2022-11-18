@@ -20,6 +20,36 @@ end
     return vect(rot_vec)
 end
 
+# θ, φ in ecliptic coord → θ, φ in galactic coord 
+function rot_E2G_ang(β, λ)
+    # reference:: https://aas.aanda.org/articles/aas/full/1998/01/ds1449/node3.html
+    # equinox 1950
+    # (theta,phi)
+    # -π < λ,l < π  ,   0 < β < π
+    β_NGP = deg2rad(29.81)
+    λ_0 = deg2rad(269.32)
+    l_1 = deg2rad(6.38)
+    β = pi/2.0 - β # 0 < β < π →  -π/2 < β < π/2
+    sin_b = (sin(β) * sin(β_NGP) - cos(β) * cos(β_NGP) * sin(λ - λ_0))
+    b = asin(sin_b)
+
+    cos_l_l_1 = (cos(λ - λ_0) * cos(β) / cos(b))
+    sin_l_l_1 = ((sin(β) * cos(β_NGP) + cos(β) * sin(β_NGP) * sin(λ - λ_0)) / cos(b))
+    l_l_1 = atan(sin_l_l_1, cos_l_l_1)
+    l = l_l_1 + l_1
+    b = pi/2.0 - b
+    return b, l
+end
+
+# vector in ecliptic coord → vector in galactic coord. But output vector is static vector
+function ecliptic2galactic(v)
+    β, λ = vec2ang(v[1], v[2], v[3])
+    b, l = rot_E2G_ang(β, λ)
+    x, y, z = ang2vec(b, l)
+    return @SVector [x, y, z]
+end
+
+
 mutable struct ScanningStrategy{T<:AbstractFloat, I<:Int, AA<:AbstractArray{T}, AS<:AbstractString}
     nside::I
     duration::I
@@ -33,6 +63,7 @@ mutable struct ScanningStrategy{T<:AbstractFloat, I<:Int, AA<:AbstractArray{T}, 
     FP_phi::AA
     start_point::AS
     start_angle::T
+    coord::AS
 end
 
 rpm2angfreq(rpm) = (2.0π / 60.0) * rpm
@@ -49,8 +80,40 @@ function period2rpm(period,; unit="min")
     end
     return rpm
 end
-    
 
+function rpm2period(rpm,; unit="min")
+    if unit == "min"
+        period = 1.0 / rpm
+    end
+    if unit == "sec"
+        period = 1.0 / (rpm/60.0)
+    end
+    if unit == "hour"
+        period = 1.0 / (rpm/60.0/60.0)
+    end
+    return period
+end
+    
+function show_ss(ss::ScanningStrategy)
+    @printf("%-24s : %i \n", "nside", ss.nside)
+    @printf("%-24s : %0.1f \n", "duration [sec]", ss.duration)
+    @printf("%-24s : %0.1f \n", "sampling rate [Hz]", ss.sampling_rate)
+    @printf("%-24s : %0.1f \n", "alpha [deg]", ss.alpha)
+    @printf("%-24s : %0.1f \n", "beta [deg]", ss.beta)
+    
+    @printf("%-24s : %0.3f\n", "prec. period [min]", period2rpm(ss.prec_rpm))
+    @printf("%1s %-22s : %f\n", '\u21B3', "prec. rate [rpm]", ss.prec_rpm)
+    
+    @printf("%-24s : %0.3f\n", "spin period [min]", period2rpm(ss.spin_rpm))
+    @printf("%1s %-22s : %f\n", '\u21B3', "spin rate [rpm]", ss.spin_rpm)
+    @printf("%-24s : %f \n", "HWP rot. rate[rpm]", ss.hwp_rpm)
+    @printf("%-24s : %s \n", "start point", ss.start_point)
+    @printf("%-24s : %f \n", "start angle", ss.start_angle)
+    @printf("%-24s\n", "FPU")
+    for i in eachindex(ss.FP_theta)
+        @printf("\u21B3 Det.%i(θ,φ)%-12s : (%0.3f, %0.3f) \n", i, "", ss.FP_theta[i], ss.FP_phi[i])    
+    end
+end
 
 """
     gen_ScanningStrategy(args***)
@@ -89,7 +152,8 @@ function gen_ScanningStrategy(;
         FP_theta=[0.0], 
         FP_phi=[0.0], 
         start_point="equator", 
-        start_angle=0.0
+        start_angle=0.0,
+        coord="E" 
     )
     scanning_strategy_structure = ScanningStrategy(
         nside,
@@ -103,7 +167,8 @@ function gen_ScanningStrategy(;
         Float64.(FP_theta),
         Float64.(FP_phi),
         start_point,
-        start_angle
+        start_angle,
+        coord
     )
     return scanning_strategy_structure
 end
@@ -126,6 +191,17 @@ function initial_state(ss::ScanningStrategy)
     b₀ = vector_rotator(b₀, flip_angle, spin_axis)
     d₀ = vector_rotator(b₀, -π/2, ey)
     u₀ = scan_direction *  b₀ × d₀
+    
+    if ss.coord == "G"
+        ex = ecliptic2galactic(ex)
+        ey = ecliptic2galactic(ey)
+        ez = ecliptic2galactic(ez)
+        spin_axis = ecliptic2galactic(spin_axis)
+        b₀ = ecliptic2galactic(b₀)
+        anti_sun_axis = ex
+        d₀ = ecliptic2galactic(d₀)
+        u₀ = ecliptic2galactic(u₀)
+    end
     
     qb₀ = Quaternion(0.0, b₀)
     qd₀ = Quaternion(0.0, d₀)
@@ -188,6 +264,10 @@ function get_pointings_tuple(ss::ScanningStrategy, start, stop)
     
     ey = @SVector [0.0, 1.0, 0.0]
     ez = @SVector [0.0, 0.0, 1.0]
+    if ss.coord == "G"
+        ey = ecliptic2galactic(ey)
+        ez = ecliptic2galactic(ez)
+    end
 
     qb₀, qd₀, qu₀, spin_axis, antisun_axis = initial_state(ss)
     
