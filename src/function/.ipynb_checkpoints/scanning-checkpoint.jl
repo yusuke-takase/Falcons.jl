@@ -116,6 +116,26 @@ function show_ss(ss::ScanningStrategy)
     end
 end
 
+mutable struct pointings
+    x::AbstractFloat
+    y::AbstractFloat
+    z::AbstractFloat
+    θ::AbstractFloat # position of sky
+    φ::AbstractFloat # position of sky
+    Ω::Int           # Sky pixel index
+    ψ::AbstractFloat # Crossing angle
+    ϕ::AbstractFloat # HWP angle
+    ξ::AbstractFloat # mod2pi(2ϕ) + ψ
+end
+
+function pointings(resol::Resolution, θ, φ, ψ, ϕ)
+    vec = ang2vec(θ, φ)
+    Ω = ang2pixRing(resol, θ, φ)
+    ξ = mod2pi(2ϕ) + ψ
+    return pointings(vec[1],vec[2],vec[3], θ, φ, Ω, ψ, ϕ, ξ)
+end
+
+
 """
     gen_ScanningStrategy(args***)
 
@@ -422,23 +442,6 @@ function convert_maps(healpy_maps)
         healpy_maps[2,:], 
         healpy_maps[3,:],
     )
-end
-
-mutable struct pointings
-    x::AbstractFloat
-    y::AbstractFloat
-    z::AbstractFloat
-    θ::AbstractFloat
-    φ::AbstractFloat
-    Ω::Int
-    ψ::AbstractFloat
-    ϕ::AbstractFloat
-end
-
-function pointings(resol::Resolution, θ, φ, ψ, ϕ)
-    vec = ang2vec(θ, φ)
-    Ω = ang2pixRing(resol, θ, φ)
-    return pointings(vec[1],vec[2],vec[3], θ, φ, Ω, ψ, ϕ)
 end
 
 function normarize!(resol::Resolution, maps::Array, hitmap::Array)

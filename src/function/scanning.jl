@@ -444,23 +444,6 @@ function convert_maps(healpy_maps)
     )
 end
 
-mutable struct pointings
-    x::AbstractFloat
-    y::AbstractFloat
-    z::AbstractFloat
-    θ::AbstractFloat
-    φ::AbstractFloat
-    Ω::Int
-    ψ::AbstractFloat
-    ϕ::AbstractFloat
-end
-
-function pointings(resol::Resolution, θ, φ, ψ, ϕ)
-    vec = ang2vec(θ, φ)
-    Ω = ang2pixRing(resol, θ, φ)
-    return pointings(vec[1],vec[2],vec[3], θ, φ, Ω, ψ, ϕ)
-end
-
 function normarize!(resol::Resolution, maps::Array, hitmap::Array)
     if size(maps) == (3,1,resol.numOfPixels)
         for i in 1:3
