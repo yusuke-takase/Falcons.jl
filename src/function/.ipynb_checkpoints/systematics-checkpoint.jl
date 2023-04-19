@@ -276,3 +276,68 @@ function get_psi_time_DataBase(ss::ScanningStrategy,; division::Int, idx, map_di
     end
     return (map_div, idx, psi_db, time_db)
 end
+
+w(ψ,ϕ) = @SMatrix [1 cos(2ψ+4ϕ) sin(2ψ+4ϕ)]
+
+function binned_mapmake(ss::ScanningStrategy, division::Int, inputinfo::Falcons.InputInfo, signal)    
+    resol = Resolution(ss.nside)
+    npix = resol.numOfPixels
+    chunk = Int(ss.duration / division)
+    ω_hwp = rpm2angfreq(ss.hwp_rpm)
+    total_signal = zeros(3, 1, npix)
+    hitmap = zeros(Int64, npix)
+    hitmatrix = zeros(3, 3, npix)
+    outmap = zeros(3, 1, npix)
+    progress = Progress(division)
+    inputmap = inputinfo.Inputmap
+    pixbuf = Array{Int}(undef, 4)
+    weightbuf = Array{Float64}(undef, 4)
+    BEGIN = 0
+    @inbounds @views for i = 1:division
+        END = i * chunk
+        theta, phi, psi, time = get_pointings_tuple(ss, BEGIN, END)
+        @views @inbounds for j = eachindex(length(ss.FP_theta))
+            theta_j = theta[:,j]
+            phi_j = phi[:,j]
+            psi_j = psi[:,j]
+            @inbounds @views for k = eachindex(time)
+                t = time[k]
+                p = pointings(resol, theta_j[k], phi_j[k], psi_j[k], mod2pi(ω_hwp*t))
+                dₖ = signal(p, inputmap)
+                total_signal[:, :, p.Ω] .+= @SMatrix [dₖ; dₖ*cos(2p.ψ+4p.ϕ); dₖ*sin(2p.ψ+4p.ϕ)]
+                hitmap[p.Ω] += 1
+                hitmatrix[:, :, p.Ω] .+= transpose(w(p.ψ, p.ϕ)) * w(p.ψ, p.ϕ)
+            end
+        end
+        BEGIN = END
+        next!(progress)
+    end
+    normarize!(resol, total_signal, hitmap)
+    normarize!(resol, hitmatrix, hitmap)
+    @inbounds @threads for j = 1:npix
+        outmap[:, :, j] = hitmatrix[:, :, j] \ total_signal[:, :, j]
+    end
+    outmap = transpose([outmap[1,1,:] outmap[2,1,:] outmap[3,1,:]])
+    return outmap, hitmap
+end
+
+
+function signal(p::pointings, maps::PolarizedHealpixMap, pixbuf, weightbuf)
+    maps.i[p.Ω] + maps.q[p.Ω]*cos(2p.ψ+4p.ϕ) + maps.u[p.Ω]*sin(2p.ψ+4p.ϕ)
+end
+
+function interp_signal(p::pointings, maps::PolarizedHealpixMap)
+    i = interpolate(maps.i, p.θ, p.φ)
+    q = interpolate(maps.q, p.θ, p.φ)
+    u = interpolate(maps.u, p.θ, p.φ)
+    return i + q*cos(2p.ψ+4p.ϕ) + u*sin(2p.ψ+4p.ϕ)
+end
+pixbuf = Array{Int}(undef, 4)
+weightbuf = Array{Float64}(undef, 4)
+
+function interp_signal(p::pointings, maps::PolarizedHealpixMap, pixbuf, weightbuf)
+    i = interpolate(maps.i, p.θ, p.φ, pixbuf, weightbuf)
+    q = interpolate(maps.q, p.θ, p.φ, pixbuf, weightbuf)
+    u = interpolate(maps.u, p.θ, p.φ, pixbuf, weightbuf)
+    return i + q*cos(2p.ψ+4p.ϕ) + u*sin(2p.ψ+4p.ϕ)
+end

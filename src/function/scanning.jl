@@ -109,11 +109,32 @@ function show_ss(ss::ScanningStrategy)
     @printf("%-24s : %f \n", "HWP rot. rate[rpm]", ss.hwp_rpm)
     @printf("%-24s : %s \n", "start point", ss.start_point)
     @printf("%-24s : %f \n", "start angle", ss.start_angle)
+    @printf("%-24s : %s \n", "coordinate system", ss.coord)
     @printf("%-24s\n", "FPU")
     for i in eachindex(ss.FP_theta)
         @printf("\u21B3 Det.%i(θ,φ)%-12s : (%0.3f, %0.3f) \n", i, "", ss.FP_theta[i], ss.FP_phi[i])    
     end
 end
+
+mutable struct pointings
+    x::AbstractFloat
+    y::AbstractFloat
+    z::AbstractFloat
+    θ::AbstractFloat # position of sky
+    φ::AbstractFloat # position of sky
+    Ω::Int           # Sky pixel index
+    ψ::AbstractFloat # Crossing angle
+    ϕ::AbstractFloat # HWP angle
+    ξ::AbstractFloat # mod2pi(2ϕ) + ψ
+end
+
+function pointings(resol::Resolution, θ, φ, ψ, ϕ)
+    vec = ang2vec(θ, φ)
+    Ω = ang2pixRing(resol, θ, φ)
+    ξ = mod2pi(2ϕ) + ψ
+    return pointings(vec[1],vec[2],vec[3], θ, φ, Ω, ψ, ϕ, ξ)
+end
+
 
 """
     gen_ScanningStrategy(args***)
@@ -290,9 +311,8 @@ function get_pointings_tuple(ss::ScanningStrategy, start, stop)
             
             ell = (p × ez) × p  
             
-            θ, ϕ = vec2ang_ver2(p[1], p[2], p[3])
+            #θ, ϕ = vec2ang_ver2(p[1], p[2], p[3])
             θ, ϕ = vec2ang(p[1], p[2], p[3])
-
             theta_tod[i, j] = θ
             phi_tod[i, j] = ϕ
 
@@ -424,4 +444,35 @@ function convert_maps(healpy_maps)
     )
 end
 
+mutable struct pointings
+    x::AbstractFloat
+    y::AbstractFloat
+    z::AbstractFloat
+    θ::AbstractFloat
+    φ::AbstractFloat
+    Ω::Int
+    ψ::AbstractFloat
+    ϕ::AbstractFloat
+end
 
+function pointings(resol::Resolution, θ, φ, ψ, ϕ)
+    vec = ang2vec(θ, φ)
+    Ω = ang2pixRing(resol, θ, φ)
+    return pointings(vec[1],vec[2],vec[3], θ, φ, Ω, ψ, ϕ)
+end
+
+function normarize!(resol::Resolution, maps::Array, hitmap::Array)
+    if size(maps) == (3,1,resol.numOfPixels)
+        for i in 1:3
+            maps[i,1,:] ./= hitmap
+        end
+    end
+    if size(maps) == (3,3,resol.numOfPixels)
+        for i in 1:3
+            for j in 1:3
+                maps[i,j,:] ./= hitmap
+            end
+        end
+    end
+    return maps
+end
