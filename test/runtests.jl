@@ -14,7 +14,7 @@ ss = gen_ScanningStrategy(duration=day)
     println("Test ScanningStrategy ==> ", ss)
 end
 println()
-@testset "get_pointings_tuple-Test" begin    
+@testset "get_pointings_tuple-Test" begin
     pointings = get_pointings_tuple(ss, 0, 30)
     @test typeof(pointings[1]) <: Matrix
     @test typeof(pointings[2]) <: Matrix
