@@ -49,6 +49,13 @@ function ecliptic2galactic(v)
     return @SVector [x, y, z]
 end
 
+function ecliptic2galactic(q::Quaternion)
+    β, λ = vec2ang(q.q1, q.q2, q.q3)
+    b, l = rot_E2G_ang(β, λ)
+    x, y, z = ang2vec(b, l)
+    return Quaternion(0, x, y, z)
+end
+
 
 mutable struct ScanningStrategy{T<:AbstractFloat, I<:Int, AA<:AbstractArray{T}, AS<:AbstractString}
     nside::I
@@ -65,6 +72,23 @@ mutable struct ScanningStrategy{T<:AbstractFloat, I<:Int, AA<:AbstractArray{T}, 
     start_angle::T
     coord::AS
 end
+
+mutable struct ScanningStrategy_imo{T<:AbstractFloat, I<:Int, AS<:AbstractString}
+    nside::I
+    duration::I
+    sampling_rate::T
+    alpha::T
+    beta::T
+    prec_rpm::T
+    spin_rpm::T
+    hwp_rpm::T
+    start_point::AS
+    start_angle::T
+    coord::AS
+    quat::Vector{Vector{Float64}}
+    name::Vector{String}
+end
+
 
 rpm2angfreq(rpm) = (2.0π / 60.0) * rpm
 
@@ -113,6 +137,33 @@ function show_ss(ss::ScanningStrategy)
     @printf("%-24s\n", "FPU")
     for i in eachindex(ss.FP_theta)
         @printf("\u21B3 Det.%i(θ,φ)%-12s : (%0.3f, %0.3f) \n", i, "", ss.FP_theta[i], ss.FP_phi[i])    
+    end
+end
+
+function show_ss(ss::ScanningStrategy_imo)
+    @printf("%-24s : %i \n", "nside", ss.nside)
+    @printf("%-24s : %0.1f \n", "duration [sec]", ss.duration)
+    @printf("%-24s : %0.1f \n", "sampling rate [Hz]", ss.sampling_rate)
+    @printf("%-24s : %0.1f \n", "alpha [deg]", ss.alpha)
+    @printf("%-24s : %0.1f \n", "beta [deg]", ss.beta)
+    
+    @printf("%-24s : %0.3f\n", "prec. period [min]", period2rpm(ss.prec_rpm))
+    @printf("%1s %-22s : %f\n", '\u21B3', "prec. rate [rpm]", ss.prec_rpm)
+    
+    @printf("%-24s : %0.3f\n", "spin period [min]", period2rpm(ss.spin_rpm))
+    @printf("%1s %-22s : %f\n", '\u21B3', "spin rate [rpm]", ss.spin_rpm)
+    @printf("%-24s : %f \n", "HWP rot. rate[rpm]", ss.hwp_rpm)
+    @printf("%-24s : %s \n", "start point", ss.start_point)
+    @printf("%-24s : %f \n", "start angle", ss.start_angle)
+    @printf("%-24s : %s \n", "coordinate system", ss.coord)
+    @printf("%-24s\n", "FPU")
+    for i in eachindex(ss.quat)
+        @printf("\u21B3 Det. %i  %s %-12s : (x,w,z,w) = [%0.3f, %0.3f, %0.3f, %0.3f] \n", i, ss.name[i], "",
+            ss.quat[i][1],
+            ss.quat[i][2],
+            ss.quat[i][3],
+            ss.quat[i][4]
+        )
     end
 end
 
@@ -174,7 +225,7 @@ function gen_ScanningStrategy(;
         FP_phi=[0.0], 
         start_point="equator", 
         start_angle=0.0,
-        coord="E" 
+        coord="E",
     )
     scanning_strategy_structure = ScanningStrategy(
         nside,
@@ -189,10 +240,45 @@ function gen_ScanningStrategy(;
         Float64.(FP_phi),
         start_point,
         start_angle,
-        coord
+        coord,
     )
     return scanning_strategy_structure
 end
+
+function gen_ScanningStrategy_imo(;
+        nside=128, 
+        duration=60*60*24*365, 
+        sampling_rate=1.0,
+        alpha=45, 
+        beta=50, 
+        prec_rpm=period2rpm(192.348), 
+        spin_rpm=0.05, 
+        hwp_rpm=0, 
+        start_point="equator", 
+        start_angle=0.0,
+        coord="E",
+        quat=[[0.,0.,1.,0.]],
+        name= ["boresight"]
+    )
+    scanning_strategy_structure = ScanningStrategy_imo(
+        nside,
+        duration,
+        sampling_rate,
+        Float64(alpha),
+        Float64(beta),
+        Float64(prec_rpm),
+        Float64(spin_rpm),
+        Float64(hwp_rpm),
+        start_point,
+        start_angle,
+        coord,
+        quat,
+        name
+    )
+    return scanning_strategy_structure
+end
+
+
 
 function initial_state(ss::ScanningStrategy)
     ex = [1.0, 0.0, 0.0]
@@ -241,6 +327,35 @@ function initial_state(ss::ScanningStrategy)
     anti_sun_axis = vect(qanti_sun_axis)
     
     return (qb₀, qd₀, qu₀, spin_axis, anti_sun_axis)
+end
+
+function imo2scan_coordinate(ss::ScanningStrategy_imo)
+    function quat(ϕ, rotate_axis)
+        Quaternion([cos(ϕ/2.), rotate_axis[1]*sin(ϕ/2.), rotate_axis[2]*sin(ϕ/2.), rotate_axis[3]*sin(ϕ/2.)])
+    end
+    ex = [1.0, 0.0, 0.0]
+    ey = [0.0, 1.0, 0.0]
+    ez = [0.0, 0.0, 1.0]
+    q_boresight = Quaternion(0.,0.,0.,1.)
+    q_pol    = Quaternion(0.,1.,0.,0.)
+    q_scan   = Quaternion(0.,0.,1.,0.)
+    q_d      = [Quaternion{Float64}(I) for i in eachindex(ss.quat)]
+    q_pol_d  = [Quaternion{Float64}(I) for i in eachindex(ss.quat)]
+    
+    spin_axis = [cosd(ss.alpha), 0, sind(ss.alpha)]
+    anti_sun_axis = ex
+    position = 0
+    
+    if ss.start_point == "pole"
+        position = π
+    end
+    for i in eachindex(ss.quat)
+        q_imo      = Quaternion(ss.quat[i][4], ss.quat[i][1], ss.quat[i][2], ss.quat[i][3]) #Quaternion(df.quat[i])
+        Q          = quat(position, spin_axis) * quat(deg2rad(90.0-ss.alpha+ss.beta), ey) * quat(-π/2., ez) * q_imo
+        q_d[i]     = Q * q_boresight / Q
+        q_pol_d[i] = Q * q_pol / Q
+    end
+    return (q_d, q_pol_d, q_scan, spin_axis, anti_sun_axis)
 end
 
 """
@@ -330,7 +445,66 @@ function get_pointings_tuple(ss::ScanningStrategy, start, stop)
     return (theta_tod, phi_tod, psi_tod, time_array)
 end
 
+function get_pointings_tuple(ss::ScanningStrategy_imo, start, stop)
+    resol = Resolution(ss.nside)
+    omega_spin = rpm2angfreq(ss.spin_rpm)
+    omega_prec = rpm2angfreq(ss.prec_rpm)
+    omega_revol = (2π) / (60.0 * 60.0 * 24.0 * 365.25)
+    time_array = start:1/ss.sampling_rate:stop-1/ss.sampling_rate |> LinRange
+    if start > stop-1/ss.sampling_rate
+        error("ERROR: \n The `start` time of the calculation is greater than or equal to the `stop` time.")
+    end
+    loop_times = length(time_array)
+    numof_det = length(ss.quat)
+
+    psi_tod = zeros(loop_times, numof_det)
+    theta_tod = zeros(loop_times, numof_det)
+    phi_tod = zeros(loop_times, numof_det)
     
+    ey = @SVector [0.0, 1.0, 0.0]
+    ez = @SVector [0.0, 0.0, 1.0]
+    if ss.coord == "G"
+        ey = ecliptic2galactic(ey)
+        ez = ecliptic2galactic(ez)
+    end
+
+    qb₀, qd₀, qu₀, spin_axis, antisun_axis = imo2scan_coordinate(ss)
+    
+    @views @inbounds for j = eachindex(ss.quat)
+        qp₀ⱼ = qb₀[j]
+        @views for i = eachindex(time_array)
+            t = time_array[i]
+            qᵣ = quaternion_rotator(omega_revol, t, ez)
+            qₚ = quaternion_rotator(omega_prec, t, antisun_axis)
+            qₛ = quaternion_rotator(omega_spin, t, spin_axis)
+            Q = qᵣ * qₚ * qₛ
+            qp = Q * qp₀ⱼ / Q
+            qu = Q * qu₀ / Q
+            
+            p = vect(qp)
+            u = vect(qu)
+            
+            ell = (p × ez) × p  
+            
+            #θ, ϕ = vec2ang_ver2(p[1], p[2], p[3])
+            θ, ϕ = vec2ang(p[1], p[2], p[3])
+            theta_tod[i, j] = θ
+            phi_tod[i, j] = ϕ
+
+            k = ell × u
+            cosk = dot(u, ell) / (norm(u) * norm(ell))
+            cosk = ifelse(abs(cosk) > 1.0, sign(cosk), cosk)
+            
+            sign_kz = sign(k[3])
+            sign_kz = ifelse(sign_kz==0, -1, sign_kz)
+            sign_pz = sign(p[3])
+            sign_pz = ifelse(sign_pz==0, 1, sign_pz)
+            psi_tod[i, j] = acos(cosk) * sign_kz * sign_pz
+        end
+    end
+    return (theta_tod, phi_tod, psi_tod, time_array)
+end
+
 
 """
     get_pointing_pixels(ss::ScanningStrategy, start, stop)
@@ -355,7 +529,7 @@ This function will return pointing pixel tod as tuple.
     - `pointings[3]`: Array of time. shape:(duration*sampling_rate)
     ...
 """
-@inline function get_pointing_pixels(ss::ScanningStrategy, start, stop)
+@inline function get_pointing_pixels(ss, start, stop)
     theta_tod, phi_tod, psi_tod, time_array = get_pointings_tuple(ss, start, stop)
     loop_times = length(theta_tod[:,1])
     numOfdet = length(theta_tod[1,:])
@@ -394,7 +568,7 @@ This function will return pointing tod as dictionary type.
     - `pointings["time"]`: Array of time. shape:(duration*sampling_rate)
     ...
 """
-function get_pointings(ss::ScanningStrategy, start, stop)
+function get_pointings(ss, start, stop)
     pointings = get_pointings_tuple(ss, start, stop)
     pointings = Dict{String,AbstractArray{Float64}}(
         "theta" => pointings[1],
@@ -458,4 +632,96 @@ function normarize!(resol::Resolution, maps::Array, hitmap::Array)
         end
     end
     return maps
+end
+
+function imo_channel!(ss::ScanningStrategy_imo, path,;channel)
+    json = JSON.parsefile(path)
+    switch = 0
+    df = ""
+    for i in eachindex(json["data_files"])
+        if haskey(json["data_files"][i]["metadata"], "pixtype") == true
+            boloname = json["data_files"][i]["metadata"]["name"]
+            teles = split.(json["data_files"][i]["metadata"]["channel"], "")[1]
+            ch = json["data_files"][i]["metadata"]["channel"]
+            if ch == channel
+                metadata = json["data_files"][i]["metadata"]
+                if switch == 0
+                    df = DataFrame(permutedims(collect(values(metadata))), collect(keys(metadata)))
+                    switch = 1
+                else
+                    push!(df, collect(values(metadata)))
+                end
+            end
+        end
+    end
+    if df == ""
+         @error "No such channel in the IMo."
+    else
+        ss.quat = Vector{Vector{Float64}}(df.quat)
+        ss.name = df.name
+        println("The channel `$(channel)` is set from IMo.")
+    end
+    return ss
+end
+
+function imo_telescope!(ss::ScanningStrategy_imo, path,;telescope)
+    json = JSON.parsefile(path)
+    switch = 0
+    df = 0
+    for i in eachindex(json["data_files"])
+        if haskey(json["data_files"][i]["metadata"], "pixtype") == true
+            boloname = json["data_files"][i]["metadata"]["name"]
+            teles = split.(json["data_files"][i]["metadata"]["channel"], "")[1]
+            ch = json["data_files"][i]["metadata"]["channel"]
+            if teles == telescope
+                metadata = json["data_files"][i]["metadata"]
+                if switch == 0
+                    df = DataFrame(permutedims(collect(values(metadata))), collect(keys(metadata)))
+                    switch = 1
+                else
+                    push!(df, collect(values(metadata)))
+                end
+            end
+        end
+    end
+    if df == ""
+         @error "No such channel in the IMo."
+    else
+        ss.quat = ss.quat = Vector{Vector{Float64}}(df.quat)
+        ss.name = df.name
+        println("The telescope `$(telescope)FT' is set from IMo.")
+    end
+    return ss
+end
+
+function imo_name!(ss::ScanningStrategy_imo, path,;name::Vector)
+    json = JSON.parsefile(path)
+    switch = 0
+    df = 0
+    for i in eachindex(json["data_files"])
+        if haskey(json["data_files"][i]["metadata"], "pixtype") == true
+            boloname = json["data_files"][i]["metadata"]["name"]
+            teles = split.(json["data_files"][i]["metadata"]["channel"], "")[1]
+            ch = json["data_files"][i]["metadata"]["channel"]
+            for j in eachindex(name)
+                if boloname == name[j]
+                    metadata = json["data_files"][i]["metadata"]
+                    if switch == 0
+                        df = DataFrame(permutedims(collect(values(metadata))), collect(keys(metadata)))
+                        switch = 1
+                    else
+                        push!(df, collect(values(metadata)))
+                    end
+                end
+            end
+        end
+    end
+    if df == ""
+         @error "No such channel in the IMo."
+    else
+        ss.quat = Vector{Vector{Float64}}(df.quat)
+        ss.name = df.name
+        println("The detector `$(name)` is set from IMo.")
+    end
+    return ss
 end

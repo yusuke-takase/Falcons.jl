@@ -4,7 +4,9 @@ authors = ["Yusuke Takase <takase_y@s.okayama-u.ac.jp>"]
 version = "0.1.8"
 
 [deps]
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 Healpix = "9f4e344d-96bc-545a-84a3-ae6b9e1b672b"
+JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 ProgressMeter = "92933f4c-e287-5a05-a399-4b506db050ca"
