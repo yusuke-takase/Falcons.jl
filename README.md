@@ -19,12 +19,17 @@ Since the user can specify the amount of memory to occupy according to the avail
 ![Figure](https://user-images.githubusercontent.com/83496454/155742440-294f6b97-1305-43ac-8d57-8534eeab7005.gif)
 
 ## Installation
-From the Julia REPL, run
+From the Julia REPL, in order to install Falcons from Julia general repository, you can run
 
 ```julia
 import Pkg
 Pkg.add("Falcons")
 ```
+Or you can install the Falcons directory from this GitHub by running
+```julia
+Pkg> add https://github.com/yusuke-takase/Falcons.jl.git
+```
+Then, master version is going to be install in your environment.
 
 ## Threading 
 Falcons uses multithreading technology internally when computing pointing TOD. It uses the `@threads` macro provided by Julia, and to use this feature, users need to make the following declarations in the configuration file of the computing environment (ex. `.bashrc`) in advance.

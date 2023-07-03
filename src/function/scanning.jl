@@ -472,7 +472,7 @@ function get_pointings_tuple(ss::ScanningStrategy_imo, start, stop)
     
     @views @inbounds for j = eachindex(ss.quat)
         qp₀ⱼ = qb₀[j]
-        @views for i = eachindex(time_array)
+        @views @inbounds for i = eachindex(time_array)
             t = time_array[i]
             qᵣ = quaternion_rotator(omega_revol, t, ez)
             qₚ = quaternion_rotator(omega_prec, t, antisun_axis)
