@@ -79,6 +79,7 @@ mutable struct ScanningStrategy_imo{T<:AbstractFloat, I<:Int, AS<:AbstractString
     sampling_rate::T
     alpha::T
     beta::T
+    gamma::T
     prec_rpm::T
     spin_rpm::T
     hwp_rpm::T
@@ -251,6 +252,7 @@ function gen_ScanningStrategy_imo(;
         sampling_rate=1.0,
         alpha=45, 
         beta=50, 
+        gamma=0,
         prec_rpm=period2rpm(192.348), 
         spin_rpm=0.05, 
         hwp_rpm=0, 
@@ -266,6 +268,7 @@ function gen_ScanningStrategy_imo(;
         sampling_rate,
         Float64(alpha),
         Float64(beta),
+        Float64(gamma),
         Float64(prec_rpm),
         Float64(spin_rpm),
         Float64(hwp_rpm),
@@ -344,16 +347,40 @@ function imo2scan_coordinate(ss::ScanningStrategy_imo)
     
     spin_axis = [cosd(ss.alpha), 0, sind(ss.alpha)]
     anti_sun_axis = ex
-    position = 0
-    
-    if ss.start_point == "pole"
-        position = π
-    end
-    for i in eachindex(ss.quat)
-        q_imo      = Quaternion(ss.quat[i][4], ss.quat[i][1], ss.quat[i][2], ss.quat[i][3]) #Quaternion(df.quat[i])
-        Q          = quat(position, spin_axis) * quat(deg2rad(90.0-ss.alpha+ss.beta), ey) * quat(-π/2., ez) * q_imo
-        q_d[i]     = Q * q_boresight / Q
-        q_pol_d[i] = Q * q_pol / Q
+    q_gamma = 0
+    if length(ss.quat) == 1
+        if ss.name[1] == "boresight"
+            if ss.start_point == "pole"
+                flip = π
+            elseif ss.start_point == "equator"
+                flip = 0
+            end
+            Q       = quat(deg2rad(90.0-ss.alpha), ey) * quat(flip, ez) * quat(deg2rad(ss.beta), ey) 
+            q_d[1]     = Q * q_boresight / Q
+            q_pol_d[1] = Q * q_pol / Q
+            return (q_d, q_pol_d, q_scan, spin_axis, anti_sun_axis)
+        end
+    else
+        for i in eachindex(ss.quat)
+            telescope  = split.(ss.name[i], "_")[1]
+            q_imo      = Quaternion(ss.quat[i][4], ss.quat[i][1], ss.quat[i][2], ss.quat[i][3])
+            if telescope == "000" #MFT
+                q_gamma = quat(deg2rad(270), ez)
+            elseif telescope == "001" #MFT
+                q_gamma = quat(deg2rad(240), ez)
+            elseif telescope == "002" #HFT
+                q_gamma = quat(deg2rad(30), ez)
+            end  
+            Q          = quat(deg2rad(ss.beta), ey) * q_gamma * q_imo
+            if telescope == "001" #MFT
+                Q = quat(π, ez) * Q
+            elseif telescope == "002" #HFT
+                Q = quat(π, ez) * Q
+            end 
+            Q          = quat(deg2rad(90.0-ss.alpha), ey) * Q 
+            q_d[i]     = Q * q_boresight / Q
+            q_pol_d[i] = Q * q_pol / Q
+        end
     end
     return (q_d, q_pol_d, q_scan, spin_axis, anti_sun_axis)
 end
