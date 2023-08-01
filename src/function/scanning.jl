@@ -159,7 +159,7 @@ function show_ss(ss::ScanningStrategy_imo)
     @printf("%-24s : %s \n", "coordinate system", ss.coord)
     @printf("%-24s\n", "FPU")
     for i in eachindex(ss.quat)
-        @printf("\u21B3 Det. %i  %s %-12s : (x,w,z,w) = [%0.3f, %0.3f, %0.3f, %0.3f] \n", i, ss.name[i], "",
+        @printf("\u21B3 Det. %i  name | %s %-12s : (x,y,z,w) = [%0.3f, %0.3f, %0.3f, %0.3f] \n", i, ss.name[i], "",
             ss.quat[i][1],
             ss.quat[i][2],
             ss.quat[i][3],
@@ -744,7 +744,7 @@ function imo_name!(ss::ScanningStrategy_imo, path,;name::Vector)
         end
     end
     if df == ""
-         @error "No such channel in the IMo."
+         @error "No such detector in the IMo."
     else
         ss.quat = Vector{Vector{Float64}}(df.quat)
         ss.name = df.name

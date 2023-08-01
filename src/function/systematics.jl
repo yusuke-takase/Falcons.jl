@@ -321,7 +321,7 @@ function binned_mapmake(ss::ScanningStrategy, division::Int, inputinfo::Falcons.
     return outmap, hitmap
 end
 
-
+#=
 function signal(p::pointings, maps::PolarizedHealpixMap, pixbuf, weightbuf)
     maps.i[p.Ω] + maps.q[p.Ω]*cos(2p.ψ+4p.ϕ) + maps.u[p.Ω]*sin(2p.ψ+4p.ϕ)
 end
@@ -341,3 +341,4 @@ function interp_signal(p::pointings, maps::PolarizedHealpixMap, pixbuf, weightbu
     u = interpolate(maps.u, p.θ, p.φ, pixbuf, weightbuf)
     return i + q*cos(2p.ψ+4p.ϕ) + u*sin(2p.ψ+4p.ϕ)
 end
+=#

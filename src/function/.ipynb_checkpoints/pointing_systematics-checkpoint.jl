@@ -30,7 +30,7 @@ function interp_signal(p::pointings, maps::PolarizedHealpixMap, pixbuf, weightbu
     u = interpolate(maps.u, p.θ, p.φ, pixbuf, weightbuf)
     return i + q*cos(2p.ξ) + u*sin(2p.ξ)
 end
-
+#=
 function normarize!(resol::Resolution, maps::Array, hitmap::Array)
     N = size(maps)[1]
     M = size(maps)[2]
@@ -48,7 +48,7 @@ function normarize!(resol::Resolution, maps::Array, hitmap::Array)
     end
     return maps
 end
-
+=#
 function gen_signalfield(resol::Resolution, maps::PolarizedHealpixMap)
     alm_i = hp.map2alm(maps.i.pixels)
     alm_q = hp.map2alm(maps.q.pixels)
@@ -97,54 +97,14 @@ end
 function quat(ϕ, rotate_axis)
     Quaternion([cos(ϕ/2.), rotate_axis[1]*sin(ϕ/2.), rotate_axis[2]*sin(ϕ/2.), rotate_axis[3]*sin(ϕ/2.)])
 end
-#=
-mutable struct EulerAngle
-    phi::Float64
-    theta::Float64
-    psi::Float64
-end
-    
-function imo2scan_coordinate_offset(ss::ScanningStrategy_imo, offset::EulerAngle)
-    function quat(ϕ, rotate_axis)
-        Quaternion([cos(ϕ/2.), rotate_axis[1]*sin(ϕ/2.), rotate_axis[2]*sin(ϕ/2.), rotate_axis[3]*sin(ϕ/2.)])
-    end
-    ex = [1., 0., 0.]
-    ey = [0., 1., 0.]
-    ez = [0., 0., 1.]
-    q_boresight = Quaternion(0.,0.,0.,1.)
-    q_pol    = Quaternion(0.,1.,0.,0.)
-    q_scan   = Quaternion(0.,0.,1.,0.)
-    q_d      = [Quaternion{Float64}(I) for i in eachindex(ss.quat)]
-    q_pol_d  = [Quaternion{Float64}(I) for i in eachindex(ss.quat)]
-    
-    spin_axis = [cosd(ss.alpha), 0., sind(ss.alpha)]
-    anti_sun_axis = ex
-    position = 0.
-    
-    yprime = quat(offset.phi, ez) * Quaternion(0., ey) / quat(offset.phi, ez)
-    zprime = quat(offset.theta, vect(yprime)) * Quaternion(0., ez) / quat(offset.theta, vect(yprime))
-    
-    if ss.start_point == "pole"
-        position = π
-    end
-    for i in eachindex(ss.quat)
-        q_imo      = Quaternion(ss.quat[i][4], ss.quat[i][1], ss.quat[i][2], ss.quat[i][3])
-        q_offset   = quat(offset.psi, vect(zprime)) * quat(offset.theta, vect(yprime)) * quat(offset.phi, ez)
-        Q_sun      = quat(position, spin_axis) * quat(deg2rad(90.0-ss.alpha+ss.beta), ey) * q_offset * quat(-π/2., ez) * q_imo
-        q_d[i]     = Q_sun * q_boresight / Q_sun
-        q_pol_d[i] = Q_sun * q_pol / Q_sun
-    end
-    
-    return (q_d, q_pol_d, q_scan, spin_axis, anti_sun_axis)
-end
-=#
 
 mutable struct OffsetAngle
+    #= Offset angle should be defined at apperture coordinate =#
     x::Float64
     y::Float64
     z::Float64
 end
-
+#=
 function imo2scan_coordinate_offset(ss::ScanningStrategy_imo, offset::OffsetAngle)
     ex = [1., 0., 0.]
     ey = [0., 1., 0.]
@@ -172,7 +132,60 @@ function imo2scan_coordinate_offset(ss::ScanningStrategy_imo, offset::OffsetAngl
     
     return (q_d, q_pol_d, q_scan, spin_axis, anti_sun_axis)
 end
+=#
 
+function imo2scan_coordinate(ss::ScanningStrategy_imo, offset::OffsetAngle)
+    ex = [1.0, 0.0, 0.0]
+    ey = [0.0, 1.0, 0.0]
+    ez = [0.0, 0.0, 1.0]
+    ex_apperture_coord = ey
+    ey_apperture_coord = ex
+    ez_apperture_coord = -ez
+    q_boresight = Quaternion(0.,0.,0.,1.)
+    q_pol    = Quaternion(0.,1.,0.,0.)
+    q_scan   = Quaternion(0.,0.,1.,0.)
+    q_d      = [Quaternion{Float64}(I) for i in eachindex(ss.quat)]
+    q_pol_d  = [Quaternion{Float64}(I) for i in eachindex(ss.quat)]
+    q_offset   = quat(offset.x, ex_apperture_coord) * quat(offset.y, ey_apperture_coord) * quat(offset.z, ez_apperture_coord)
+    spin_axis = [cosd(ss.alpha), 0, sind(ss.alpha)]
+    anti_sun_axis = ex
+    q_gamma = 0
+    if length(ss.quat) == 1
+        if ss.name[1] == "boresight"
+            if ss.start_point == "pole"
+                flip = π
+            elseif ss.start_point == "equator"
+                flip = 0
+            end
+            Q          = quat(deg2rad(90.0-ss.alpha), ey) * quat(flip, ez) * quat(deg2rad(ss.beta), ey) * q_offset
+            q_d[1]     = Q * q_boresight / Q
+            q_pol_d[1] = Q * q_pol / Q
+            return (q_d, q_pol_d, q_scan, spin_axis, anti_sun_axis)
+        end
+    else
+        for i in eachindex(ss.quat)
+            telescope  = split.(ss.name[i], "_")[1]
+            q_imo      = Quaternion(ss.quat[i][4], ss.quat[i][1], ss.quat[i][2], ss.quat[i][3])
+            if telescope     == "000" #LFT
+                q_gamma = quat(deg2rad(270), ez)
+            elseif telescope == "001" #MFT
+                q_gamma = quat(deg2rad(240), ez)
+            elseif telescope == "002" #HFT
+                q_gamma = quat(deg2rad(30), ez)
+            end  
+            Q           = quat(deg2rad(ss.beta), ey) *  q_offset *  q_gamma * q_imo
+            if telescope == "001" #MFT
+                Q = quat(π, ez) * Q
+            elseif telescope == "002" #HFT
+                Q = quat(π, ez) * Q
+            end 
+            Q          = quat(deg2rad(90.0-ss.alpha), ey) * Q 
+            q_d[i]     = Q * q_boresight / Q
+            q_pol_d[i] = Q * q_pol / Q
+        end
+    end
+    return (q_d, q_pol_d, q_scan, spin_axis, anti_sun_axis)
+end
 
 function get_pointings_offset(ss::ScanningStrategy_imo, offset::OffsetAngle, start, stop)
     resol = Resolution(ss.nside)
@@ -197,7 +210,7 @@ function get_pointings_offset(ss::ScanningStrategy_imo, offset::OffsetAngle, sta
         ez = ecliptic2galactic(ez)
     end
 
-    qb₀, qd₀, qu₀, spin_axis, antisun_axis = imo2scan_coordinate_offset(ss, offset)
+    qb₀, qd₀, qu₀, spin_axis, antisun_axis = imo2scan_coordinate(ss, offset)
     
     @views @inbounds for j = eachindex(ss.quat)
         qp₀ⱼ = qb₀[j]
