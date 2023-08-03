@@ -1,4 +1,4 @@
-@inline function vec2ang_ver2(x, y, z)
+@inline function vec2ang_lbsim_phi(x, y, z)
     norm = sqrt(x^2 + y^2 + z^2)
     theta = acos(z / norm)
     phi = atan(y, x)
@@ -88,6 +88,7 @@ mutable struct ScanningStrategy_imo{T<:AbstractFloat, I<:Int, AS<:AbstractString
     coord::AS
     quat::Vector{Vector{Float64}}
     name::Vector{String}
+    info::DataFrame
 end
 
 
@@ -168,7 +169,7 @@ function show_ss(ss::ScanningStrategy_imo)
     end
 end
 
-mutable struct pointings
+mutable struct Pointings
     x::AbstractFloat
     y::AbstractFloat
     z::AbstractFloat
@@ -184,7 +185,7 @@ function pointings(resol::Resolution, θ, φ, ψ, ϕ)
     vec = ang2vec(θ, φ)
     Ω = ang2pixRing(resol, θ, φ)
     ξ = mod2pi(2ϕ) + ψ
-    return pointings(vec[1],vec[2],vec[3], θ, φ, Ω, ψ, ϕ, ξ)
+    return Pointings(vec[1],vec[2],vec[3], θ, φ, Ω, ψ, ϕ, ξ)
 end
 
 
@@ -260,7 +261,8 @@ function gen_ScanningStrategy_imo(;
         start_angle=0.0,
         coord="E",
         quat=[[0.,0.,1.,0.]],
-        name= ["boresight"]
+        name= ["boresight"],
+        info = DataFrame()
     )
     scanning_strategy_structure = ScanningStrategy_imo(
         nside,
@@ -276,7 +278,8 @@ function gen_ScanningStrategy_imo(;
         start_angle,
         coord,
         quat,
-        name
+        name,
+        info
     )
     return scanning_strategy_structure
 end
@@ -331,7 +334,7 @@ function initial_state(ss::ScanningStrategy)
     
     return (qb₀, qd₀, qu₀, spin_axis, anti_sun_axis)
 end
-
+#=
 function imo2scan_coordinate(ss::ScanningStrategy_imo)
     function quat(ϕ, rotate_axis)
         Quaternion([cos(ϕ/2.), rotate_axis[1]*sin(ϕ/2.), rotate_axis[2]*sin(ϕ/2.), rotate_axis[3]*sin(ϕ/2.)])
@@ -384,6 +387,81 @@ function imo2scan_coordinate(ss::ScanningStrategy_imo)
     end
     return (q_d, q_pol_d, q_scan, spin_axis, anti_sun_axis)
 end
+=#
+
+
+function imo2scan_coordinate(ss::ScanningStrategy_imo)
+    function quat(ϕ, rotate_axis)
+        Quaternion([cos(ϕ/2.), rotate_axis[1]*sin(ϕ/2.), rotate_axis[2]*sin(ϕ/2.), rotate_axis[3]*sin(ϕ/2.)])
+    end
+    ex = [1.0, 0.0, 0.0]
+    ey = [0.0, 1.0, 0.0]
+    ez = [0.0, 0.0, 1.0]
+    q_boresight = Quaternion(0.,0.,0.,1.)
+    q_pol    = Quaternion(0.,1.,0.,0.)
+    q_scan   = Quaternion(0.,0.,1.,0.)
+    q_d      = [Quaternion{Float64}(I) for i in eachindex(ss.quat)]
+    q_pol_d  = [Quaternion{Float64}(I) for i in eachindex(ss.quat)]
+    
+    spin_axis = [cosd(ss.alpha), 0, sind(ss.alpha)]
+    anti_sun_axis = ex
+    q_gamma   = 0.
+    polang    = 0.
+    for i in eachindex(ss.quat)
+        if ss.name[i] == "boresight"
+            #println("Boresight single pixel was chosen.")
+            if ss.start_point == "pole"
+                flip = π
+            elseif ss.start_point == "equator"
+                flip = 0
+            end
+            Q          = quat(deg2rad(90.0-ss.alpha), ey) * quat(flip, ez) * quat(deg2rad(ss.beta), ey)
+            q_d[i]     = Q * q_boresight / Q
+            q_pol_d[i] = Q * q_pol / Q
+            #q_scan_d[1] = q_offset * q_scan / q_offset
+            #return (q_d, q_pol_d, spin_axis, anti_sun_axis)
+        else
+            #println("Multiple detectors were chosen.")
+            telescope  = split.(ss.name[i], "_")[1]
+            q_imo      = Quaternion(ss.quat[i][4], ss.quat[i][1], ss.quat[i][2], ss.quat[i][3])
+            if telescope     == "000" #LFT
+                q_gamma = quat(deg2rad(270), ez)
+            elseif telescope == "001" #MFT
+                q_gamma = quat(deg2rad(240), ez)
+            elseif telescope == "002" #HFT
+                q_gamma = quat(deg2rad(30), ez)
+            end  
+            Q           = quat(deg2rad(ss.beta), ey) * q_gamma * q_imo
+            if telescope == "001" #MFT
+                Q = quat(π, ez) * Q
+            elseif telescope == "002" #HFT
+                Q = quat(π, ez) * Q
+            end 
+            Q          = quat(deg2rad(90.0-ss.alpha), ey) * Q 
+            q_d[i]     = Q * q_boresight / Q
+            if ss.info.orient[i] == "Q"
+                if ss.info.pol[i] == "T"
+                    polang = 0
+                elseif ss.info.pol[i] == "B"
+                    polang = π/2
+                end
+            end
+            if ss.info.orient[i] == "U"
+                if ss.info.pol[i] == "T"
+                    polang = π/4
+                elseif ss.info.pol[i] == "B"
+                    polang = 3π/4
+                end
+            end
+            #q_pol_d[i] = quat(polang, ez) * q_pol / quat(polang, ez)
+            q_pol_d[i] = Q * quat(polang, ez) * q_pol / quat(polang, ez) / Q
+            #q_pol_d[i] = Q * q_pol / Q
+        end
+    end
+    return (q_d, q_pol_d, q_scan, spin_axis, anti_sun_axis)
+end
+
+
 
 """
     get_pointings_tuple(ss::ScanningStrategy, start, stop)
@@ -686,6 +764,7 @@ function imo_channel!(ss::ScanningStrategy_imo, path,;channel)
     else
         ss.quat = Vector{Vector{Float64}}(df.quat)
         ss.name = df.name
+        ss.info = df
         println("The channel `$(channel)` is set from IMo.")
     end
     return ss
@@ -714,8 +793,9 @@ function imo_telescope!(ss::ScanningStrategy_imo, path,;telescope)
     if df == ""
          @error "No such channel in the IMo."
     else
-        ss.quat = ss.quat = Vector{Vector{Float64}}(df.quat)
+        ss.quat = Vector{Vector{Float64}}(df.quat)
         ss.name = df.name
+        ss.info = df
         println("The telescope `$(telescope)FT' is set from IMo.")
     end
     return ss
@@ -748,7 +828,20 @@ function imo_name!(ss::ScanningStrategy_imo, path,;name::Vector)
     else
         ss.quat = Vector{Vector{Float64}}(df.quat)
         ss.name = df.name
+        ss.info = df
         println("The detector `$(name)` is set from IMo.")
     end
     return ss
+end
+
+function get_instrument_info(json, inst)
+    instrument_info = ""
+    for i in eachindex(json["data_files"])
+        if json["data_files"][i]["name"] == "instrument_info"
+            if json["data_files"][i]["metadata"]["name"] == inst
+                instrument_info = json["data_files"][i]["metadata"]
+            end
+        end
+    end
+    return instrument_info
 end

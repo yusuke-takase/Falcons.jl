@@ -2,53 +2,29 @@ function arcmin2rad(x)
     return deg2rad(x/60.)
 end
 
-function pointings(resol::Resolution, θ, φ, ψ, ϕ)
-    vec = ang2vec(θ, φ)
-    Ω = ang2pixRing(resol, θ, φ)
-    ξ = mod2pi(2ϕ) + ψ
-    return pointings(vec[1],vec[2],vec[3], θ, φ, Ω, ψ, ϕ, ξ)
-end
-
-function true_signal(p::pointings, maps::PolarizedHealpixMap, pixbuf, weightbuf)
+function true_signal(p::Pointings, maps::PolarizedHealpixMap, pixbuf, weightbuf)
     maps.i[p.Ω] + maps.q[p.Ω]*cos(2p.ξ) + maps.u[p.Ω]*sin(2p.ξ)
 end
 
-function true_signal(p::pointings, maps::PolarizedHealpixMap)
+function true_signal(p::Pointings, maps::PolarizedHealpixMap)
     maps.i[p.Ω] + maps.q[p.Ω]*cos(2p.ξ) + maps.u[p.Ω]*sin(2p.ξ)
 end
 
-function interp_signal(p::pointings, maps::PolarizedHealpixMap)
+function interp_signal(p::Pointings, maps::PolarizedHealpixMap)
     i = interpolate(maps.i, p.θ, p.φ)
     q = interpolate(maps.q, p.θ, p.φ)
     u = interpolate(maps.u, p.θ, p.φ)
     return i + q*cos(2p.ξ) + u*sin(2p.ξ)
 end
 
-function interp_signal(p::pointings, maps::PolarizedHealpixMap, pixbuf, weightbuf)
+
+function interp_signal(p::Pointings, maps::PolarizedHealpixMap, pixbuf, weightbuf)
     i = interpolate(maps.i, p.θ, p.φ, pixbuf, weightbuf)
     q = interpolate(maps.q, p.θ, p.φ, pixbuf, weightbuf)
     u = interpolate(maps.u, p.θ, p.φ, pixbuf, weightbuf)
     return i + q*cos(2p.ξ) + u*sin(2p.ξ)
 end
-#=
-function normarize!(resol::Resolution, maps::Array, hitmap::Array)
-    N = size(maps)[1]
-    M = size(maps)[2]
-    if N != M
-        for i in 1:N
-            maps[i,1,:] ./= hitmap
-        end
-    end
-    if N == M
-        for i in 1:N
-            for j in 1:N
-                maps[i,j,:] ./= hitmap
-            end
-        end
-    end
-    return maps
-end
-=#
+
 function gen_signalfield(resol::Resolution, maps::PolarizedHealpixMap)
     alm_i = hp.map2alm(maps.i.pixels)
     alm_q = hp.map2alm(maps.q.pixels)
@@ -59,7 +35,7 @@ function gen_signalfield(resol::Resolution, maps::PolarizedHealpixMap)
     return di,dq,du
 end
     
-function tayler_expanded_signal(p::pointings, m, II::Falcons.InputInfo)
+function tayler_expanded_signal(p::Pointings, m, II::Falcons.InputInfo)
     ∂I = @views m[1][3,p.Ω] - m[1][2,p.Ω]im
     ∂P = @views m[2][3,p.Ω] + m[3][2,p.Ω] - (m[2][2,p.Ω] - m[3][3,p.Ω])im
     ∂̄P = @views m[2][3,p.Ω] - m[3][2,p.Ω] + (m[2][2,p.Ω] + m[3][3,p.Ω])im
@@ -104,35 +80,6 @@ mutable struct OffsetAngle
     y::Float64
     z::Float64
 end
-#=
-function imo2scan_coordinate_offset(ss::ScanningStrategy_imo, offset::OffsetAngle)
-    ex = [1., 0., 0.]
-    ey = [0., 1., 0.]
-    ez = [0., 0., 1.]
-    q_boresight = Quaternion(0.,0.,0.,1.)
-    q_pol    = Quaternion(0.,1.,0.,0.)
-    q_scan   = Quaternion(0.,0.,1.,0.)
-    q_d      = [Quaternion{Float64}(I) for i in eachindex(ss.quat)]
-    q_pol_d  = [Quaternion{Float64}(I) for i in eachindex(ss.quat)]
-    
-    spin_axis = [cosd(ss.alpha), 0., sind(ss.alpha)]
-    anti_sun_axis = ex
-    position = 0.
-    
-    if ss.start_point == "pole"
-        position = π
-    end
-    for i in eachindex(ss.quat)
-        q_imo      = Quaternion(ss.quat[i][4], ss.quat[i][1], ss.quat[i][2], ss.quat[i][3])
-        q_offset   = quat(offset.x, ex) * quat(offset.y, ey) * quat(offset.z, ez)
-        Q_sun      = quat(position, spin_axis) * quat(deg2rad(90.0-ss.alpha+ss.beta), ey) * q_offset * quat(-π/2., ez) * q_imo
-        q_d[i]     = Q_sun * q_boresight / Q_sun
-        q_pol_d[i] = Q_sun * q_pol / Q_sun
-    end
-    
-    return (q_d, q_pol_d, q_scan, spin_axis, anti_sun_axis)
-end
-=#
 
 function imo2scan_coordinate(ss::ScanningStrategy_imo, offset::OffsetAngle)
     ex = [1.0, 0.0, 0.0]
@@ -143,27 +90,30 @@ function imo2scan_coordinate(ss::ScanningStrategy_imo, offset::OffsetAngle)
     ez_apperture_coord = -ez
     q_boresight = Quaternion(0.,0.,0.,1.)
     q_pol    = Quaternion(0.,1.,0.,0.)
-    q_scan   = Quaternion(0.,0.,1.,0.)
+    q_scan    = Quaternion(0.,0.,1.,0.)
+    
     q_d      = [Quaternion{Float64}(I) for i in eachindex(ss.quat)]
     q_pol_d  = [Quaternion{Float64}(I) for i in eachindex(ss.quat)]
+    
     q_offset   = quat(offset.x, ex_apperture_coord) * quat(offset.y, ey_apperture_coord) * quat(offset.z, ez_apperture_coord)
     spin_axis = [cosd(ss.alpha), 0, sind(ss.alpha)]
     anti_sun_axis = ex
-    q_gamma = 0
-    if length(ss.quat) == 1
-        if ss.name[1] == "boresight"
+    q_gamma = 0.
+    polang = 0.
+    for i in eachindex(ss.quat)
+        if ss.name[i] == "boresight"
+            #println("Boresight single pixel was chosen.")
             if ss.start_point == "pole"
                 flip = π
             elseif ss.start_point == "equator"
                 flip = 0
             end
             Q          = quat(deg2rad(90.0-ss.alpha), ey) * quat(flip, ez) * quat(deg2rad(ss.beta), ey) * q_offset
-            q_d[1]     = Q * q_boresight / Q
-            q_pol_d[1] = Q * q_pol / Q
-            return (q_d, q_pol_d, q_scan, spin_axis, anti_sun_axis)
-        end
-    else
-        for i in eachindex(ss.quat)
+            q_d[i]     = Q * q_boresight / Q
+            q_pol_d[i] = Q * q_pol / Q
+            #q_scan = q_offset * q_scan / q_offset
+        else
+            #println("Multiple detectors were chosen.")
             telescope  = split.(ss.name[i], "_")[1]
             q_imo      = Quaternion(ss.quat[i][4], ss.quat[i][1], ss.quat[i][2], ss.quat[i][3])
             if telescope     == "000" #LFT
@@ -173,7 +123,7 @@ function imo2scan_coordinate(ss::ScanningStrategy_imo, offset::OffsetAngle)
             elseif telescope == "002" #HFT
                 q_gamma = quat(deg2rad(30), ez)
             end  
-            Q           = quat(deg2rad(ss.beta), ey) *  q_offset *  q_gamma * q_imo
+            Q           = quat(deg2rad(ss.beta), ey) *  q_offset * q_gamma * q_imo
             if telescope == "001" #MFT
                 Q = quat(π, ez) * Q
             elseif telescope == "002" #HFT
@@ -181,7 +131,6 @@ function imo2scan_coordinate(ss::ScanningStrategy_imo, offset::OffsetAngle)
             end 
             Q          = quat(deg2rad(90.0-ss.alpha), ey) * Q 
             q_d[i]     = Q * q_boresight / Q
-            q_pol_d[i] = Q * q_pol / Q
         end
     end
     return (q_d, q_pol_d, q_scan, spin_axis, anti_sun_axis)
@@ -202,44 +151,42 @@ function get_pointings_offset(ss::ScanningStrategy_imo, offset::OffsetAngle, sta
     psi_tod = zeros(loop_times, numof_det)
     theta_tod = zeros(loop_times, numof_det)
     phi_tod = zeros(loop_times, numof_det)
+    pol_tod_xyz = zeros(loop_times, numof_det, 3)
     
     ey = @SVector [0.0, 1.0, 0.0]
     ez = @SVector [0.0, 0.0, 1.0]
     if ss.coord == "G"
-        ey = ecliptic2galactic(ey)
-        ez = ecliptic2galactic(ez)
+        error("ERROR: \n Garactic coord is not supported now.")
     end
 
-    qb₀, qd₀, qu₀, spin_axis, antisun_axis = imo2scan_coordinate(ss, offset)
+    q_d, q_pol_d, q_scan, spin_axis, antisun_axis = imo2scan_coordinate(ss, offset)
     
     @views @inbounds for j = eachindex(ss.quat)
-        qp₀ⱼ = qb₀[j]
+        q_dⱼ = q_d[j]
         @views for i = eachindex(time_array)
-            t = time_array[i]
-            qᵣ = quaternion_rotator(omega_revol, t, ez)
-            qₚ = quaternion_rotator(omega_prec, t, antisun_axis)
-            qₛ = quaternion_rotator(omega_spin, t, spin_axis)
-            Q = qᵣ * qₚ * qₛ
-            qp = Q * qp₀ⱼ / Q
-            qu = Q * qu₀ / Q
+            t       = time_array[i]
+            qᵣ      = quaternion_rotator(omega_revol, t, ez)
+            qₚ      = quaternion_rotator(omega_prec,  t, antisun_axis)
+            qₛ      = quaternion_rotator(omega_spin,  t, spin_axis)
+            Q       = qᵣ * qₚ * qₛ
+            q_dₜ     = Q * q_dⱼ / Q
+            q_pol_dₜ = Q * q_scan / Q
             
-            p = vect(qp)
-            u = vect(qu)
+            pnt = vect(q_dₜ)
+            polang = vect(q_pol_dₜ)
             
-            ell = (p × ez) × p  
-            
-            #θ, ϕ = vec2ang_ver2(p[1], p[2], p[3])
-            θ, ϕ = vec2ang(p[1], p[2], p[3])
+            ell = (pnt × ez) × pnt
+            θ, ϕ = vec2ang(pnt[1], pnt[2], pnt[3])
             theta_tod[i, j] = θ
             phi_tod[i, j] = ϕ
 
-            k = ell × u
-            cosk = dot(u, ell) / (norm(u) * norm(ell))
+            k = ell × polang
+            cosk = dot(polang, ell) / (norm(polang) * norm(ell))
             cosk = ifelse(abs(cosk) > 1.0, sign(cosk), cosk)
             
             sign_kz = sign(k[3])
             sign_kz = ifelse(sign_kz==0, -1, sign_kz)
-            sign_pz = sign(p[3])
+            sign_pz = sign(pnt[3])
             sign_pz = ifelse(sign_pz==0, 1, sign_pz)
             psi_tod[i, j] = acos(cosk) * sign_kz * sign_pz
         end
@@ -247,6 +194,23 @@ function get_pointings_offset(ss::ScanningStrategy_imo, offset::OffsetAngle, sta
     return (theta_tod, phi_tod, psi_tod, time_array)
 end    
 
+function get_pol_angle(ss::ScanningStrategy_imo, i::Int)
+    if ss.info.orient[i] == "Q"
+        if ss.info.pol[i] == "T"
+            polang = 0
+        elseif ss.info.pol[i] == "B"
+            polang = π/2
+        end
+    end
+    if ss.info.orient[i] == "U"
+        if ss.info.pol[i] == "T"
+            polang = π/4
+        elseif ss.info.pol[i] == "B"
+            polang = 3π/4
+        end
+    end
+    return polang
+end
 
 function sim_pointing_systematics(ss::ScanningStrategy_imo, 
         division::Int, 
@@ -272,7 +236,6 @@ function sim_pointing_systematics(ss::ScanningStrategy_imo,
     weightbuf = Array{Float64}(undef, 4)
     BEGIN = 0
     no_offset = OffsetAngle(0., 0., 0.)
-    
     @inbounds @views for i = 1:division
         END = i * chunk
         theta, phi, psi, time = get_pointings_offset(ss, no_offset, BEGIN, END)
@@ -284,10 +247,11 @@ function sim_pointing_systematics(ss::ScanningStrategy_imo,
             theta_e_j = theta_e[:,j]
             phi_e_j = phi_e[:,j]
             psi_e_j = psi_e[:,j]
+            polang = get_pol_angle(ss, j)
             @inbounds @views for k = eachindex(time)
                 t = time[k]
-                p = pointings(resol, theta_j[k], phi_j[k], psi_j[k], mod2pi(ω_hwp*t))
-                p_err = pointings(resol, theta_e_j[k], phi_e_j[k], psi_e_j[k], mod2pi(ω_hwp*t))
+                p = pointings(resol, theta_j[k], phi_j[k], psi_j[k], mod2pi(ω_hwp*t)+polang)
+                p_err = pointings(resol, theta_e_j[k], phi_e_j[k], psi_e_j[k], mod2pi(ω_hwp*t)+polang+offset.z)
                 dₖ = signal(p_err, inputmap)
                 total_signal[:, :, p.Ω] .+= @SMatrix [dₖ; dₖ*cos(2p.ξ); dₖ*sin(2p.ξ)]
                 hitmatrix[:, :, p.Ω] .+= transpose(w(p.ψ, p.ϕ)) * w(p.ψ, p.ϕ)
