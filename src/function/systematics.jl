@@ -279,7 +279,7 @@ end
 
 w(ψ,ϕ) = @SMatrix [1 cos(2ψ+4ϕ) sin(2ψ+4ϕ)]
 
-function binned_mapmake(ss::ScanningStrategy, division::Int, inputinfo::Falcons.InputInfo, signal)    
+function binned_mapmake(ss::ScanningStrategy, division::Int, inputinfo::Falcons.InputInfo, signal)
     resol = Resolution(ss.nside)
     npix = resol.numOfPixels
     chunk = Int(ss.duration / division)

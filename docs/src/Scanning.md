@@ -14,6 +14,8 @@ mutable struct ScanningStrategy{T<:AbstractFloat, I<:Int, AA<:AbstractArray{T}, 
     FP_theta::AA
     FP_phi::AA
     start_point::AS
+    start_angle::T
+    coord::AS
 end
 ```
 You can generate `ScanningStrategy` structure using `gen_ScanningStrategy()` function.
@@ -29,7 +31,7 @@ ss.nside = 256 #You can change a value
 ss.spin_rpm = 0.04
 ```
 
-## Generate pointing TOD
+## Generate pointings
 The information about the orientation of a satellite at a certain time is called pointing. The pointing is defined by $(\theta, \phi, \psi)$, where $\theta$ and $\phi$ are parameters of the 3D polar coordinates and $\psi$ is the angle between the scan direction and the meridian of the sky.
 
 Once the scanning strategy is determined, computing the pointing is straightforward.
