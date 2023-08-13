@@ -49,27 +49,6 @@ function tayler_expanded_signal(p::Pointings, m, II::Falcons.InputInfo)
     return I1 + P1 + P2
 end
 
-#= multi dets =#
-function get_det(path)
-    bolonames = []
-    open(path) do file
-        for (index, line) in enumerate(eachline(file))
-            # 行をタブ文字で分割して配列に格納
-            row = split(line, '\t')
-            filter!(x -> x ≠ "", row)
-            # 最初の行をヘッダーとして扱う
-            if index == 1
-                #ヘッダーをDataFrameの列名として設定
-                header = split(line)[2:end]
-            else
-                push!(bolonames, row[6])
-            end
-        end
-    end
-    return bolonames
-end
-
-
 function quat(ϕ, rotate_axis)
     Quaternion([cos(ϕ/2.), rotate_axis[1]*sin(ϕ/2.), rotate_axis[2]*sin(ϕ/2.), rotate_axis[3]*sin(ϕ/2.)])
 end

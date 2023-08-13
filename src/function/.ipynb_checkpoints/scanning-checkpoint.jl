@@ -6,7 +6,6 @@
     return (theta, phi)
 end
 
-
 @inline function quaternion_rotator(omega, t, rotate_axis)
     #= Generate a quaternion that rotates by the angle omega*t around the rotate_axis axis. =#
     rot_ang = omega * t
@@ -334,60 +333,6 @@ function initial_state(ss::ScanningStrategy)
     
     return (qb₀, qd₀, qu₀, spin_axis, anti_sun_axis)
 end
-#=
-function imo2scan_coordinate(ss::ScanningStrategy_imo)
-    function quat(ϕ, rotate_axis)
-        Quaternion([cos(ϕ/2.), rotate_axis[1]*sin(ϕ/2.), rotate_axis[2]*sin(ϕ/2.), rotate_axis[3]*sin(ϕ/2.)])
-    end
-    ex = [1.0, 0.0, 0.0]
-    ey = [0.0, 1.0, 0.0]
-    ez = [0.0, 0.0, 1.0]
-    q_boresight = Quaternion(0.,0.,0.,1.)
-    q_pol    = Quaternion(0.,1.,0.,0.)
-    q_scan   = Quaternion(0.,0.,1.,0.)
-    q_d      = [Quaternion{Float64}(I) for i in eachindex(ss.quat)]
-    q_pol_d  = [Quaternion{Float64}(I) for i in eachindex(ss.quat)]
-    
-    spin_axis = [cosd(ss.alpha), 0, sind(ss.alpha)]
-    anti_sun_axis = ex
-    q_gamma = 0
-    if length(ss.quat) == 1
-        if ss.name[1] == "boresight"
-            if ss.start_point == "pole"
-                flip = π
-            elseif ss.start_point == "equator"
-                flip = 0
-            end
-            Q       = quat(deg2rad(90.0-ss.alpha), ey) * quat(flip, ez) * quat(deg2rad(ss.beta), ey) 
-            q_d[1]     = Q * q_boresight / Q
-            q_pol_d[1] = Q * q_pol / Q
-            return (q_d, q_pol_d, q_scan, spin_axis, anti_sun_axis)
-        end
-    else
-        for i in eachindex(ss.quat)
-            telescope  = split.(ss.name[i], "_")[1]
-            q_imo      = Quaternion(ss.quat[i][4], ss.quat[i][1], ss.quat[i][2], ss.quat[i][3])
-            if telescope == "000" #MFT
-                q_gamma = quat(deg2rad(270), ez)
-            elseif telescope == "001" #MFT
-                q_gamma = quat(deg2rad(240), ez)
-            elseif telescope == "002" #HFT
-                q_gamma = quat(deg2rad(30), ez)
-            end  
-            Q          = quat(deg2rad(ss.beta), ey) * q_gamma * q_imo
-            if telescope == "001" #MFT
-                Q = quat(π, ez) * Q
-            elseif telescope == "002" #HFT
-                Q = quat(π, ez) * Q
-            end 
-            Q          = quat(deg2rad(90.0-ss.alpha), ey) * Q 
-            q_d[i]     = Q * q_boresight / Q
-            q_pol_d[i] = Q * q_pol / Q
-        end
-    end
-    return (q_d, q_pol_d, q_scan, spin_axis, anti_sun_axis)
-end
-=#
 
 
 function imo2scan_coordinate(ss::ScanningStrategy_imo)
@@ -409,7 +354,6 @@ function imo2scan_coordinate(ss::ScanningStrategy_imo)
     polang    = 0.
     for i in eachindex(ss.quat)
         if ss.name[i] == "boresight"
-            #println("Boresight single pixel was chosen.")
             if ss.start_point == "pole"
                 flip = π
             elseif ss.start_point == "equator"
@@ -418,10 +362,7 @@ function imo2scan_coordinate(ss::ScanningStrategy_imo)
             Q          = quat(deg2rad(90.0-ss.alpha), ey) * quat(flip, ez) * quat(deg2rad(ss.beta), ey)
             q_d[i]     = Q * q_boresight / Q
             q_pol_d[i] = Q * q_pol / Q
-            #q_scan_d[1] = q_offset * q_scan / q_offset
-            #return (q_d, q_pol_d, spin_axis, anti_sun_axis)
         else
-            #println("Multiple detectors were chosen.")
             telescope  = split.(ss.name[i], "_")[1]
             q_imo      = Quaternion(ss.quat[i][4], ss.quat[i][1], ss.quat[i][2], ss.quat[i][3])
             if telescope     == "000" #LFT
@@ -436,9 +377,10 @@ function imo2scan_coordinate(ss::ScanningStrategy_imo)
                 Q = quat(π, ez) * Q
             elseif telescope == "002" #HFT
                 Q = quat(π, ez) * Q
-            end 
+            end
             Q          = quat(deg2rad(90.0-ss.alpha), ey) * Q 
             q_d[i]     = Q * q_boresight / Q
+            #=
             if ss.info.orient[i] == "Q"
                 if ss.info.pol[i] == "T"
                     polang = 0
@@ -453,9 +395,8 @@ function imo2scan_coordinate(ss::ScanningStrategy_imo)
                     polang = 3π/4
                 end
             end
-            #q_pol_d[i] = quat(polang, ez) * q_pol / quat(polang, ez)
             q_pol_d[i] = Q * quat(polang, ez) * q_pol / quat(polang, ez) / Q
-            #q_pol_d[i] = Q * q_pol / Q
+            =#
         end
     end
     return (q_d, q_pol_d, q_scan, spin_axis, anti_sun_axis)
@@ -550,6 +491,41 @@ function get_pointings_tuple(ss::ScanningStrategy, start, stop)
     return (theta_tod, phi_tod, psi_tod, time_array)
 end
 
+function thetaPhi2RaDec(θ, ϕ)
+    dec =  π/2 - θ
+    ra  = ϕ
+    return (ra, dec)
+end
+
+function ecliptic2galactic!(v::Vector{<:AbstractFloat},; equinox = 2000)
+    θ, ϕ     = vec2ang(v[1], v[2], v[3])
+    ra, dec  = thetaPhi2RaDec(θ, ϕ)
+    ecliptic = EclipticCoords{equinox}(ra, dec)
+    gal      = convert(GalCoords, ecliptic)
+    θ_gal, ϕ_gal = π/2 - gal.b, gal.l
+    v_gal    = ang2vec(θ_gal, ϕ_gal)
+    v       .= v_gal
+    return v
+end
+
+function ecliptic2galactic!(q::Quaternion,; equinox = 2000)
+    θ, ϕ     = vec2ang(q.q1, q.q2, q.q3)
+    ra, dec  = thetaPhi2RaDec(θ, ϕ)
+    ecliptic = EclipticCoords{equinox}(ra, dec)
+    gal      = convert(GalCoords, ecliptic)
+    θ_gal, ϕ_gal = π/2 - gal.b, gal.l
+    x,y,z    = ang2vec(θ_gal, ϕ_gal)
+    q_gal    = Quaternion(0, x, y, z)
+    return q_gal
+end
+
+function ecliptic2galactic!(q::Vector{Quaternion{Float64}})
+    for i in eachindex(q)
+        q[i] = ecliptic2galactic!(q[i])
+    end
+    return q
+end
+
 function get_pointings_tuple(ss::ScanningStrategy_imo, start, stop)
     resol = Resolution(ss.nside)
     omega_spin = rpm2angfreq(ss.spin_rpm)
@@ -566,15 +542,22 @@ function get_pointings_tuple(ss::ScanningStrategy_imo, start, stop)
     theta_tod = zeros(loop_times, numof_det)
     phi_tod = zeros(loop_times, numof_det)
     
-    ey = @SVector [0.0, 1.0, 0.0]
-    ez = @SVector [0.0, 0.0, 1.0]
-    if ss.coord == "G"
-        ey = ecliptic2galactic(ey)
-        ez = ecliptic2galactic(ez)
-    end
-
+    ey = [0.0, 1.0, 0.0]
+    ez = [0.0, 0.0, 1.0]
     qb₀, qd₀, qu₀, spin_axis, antisun_axis = imo2scan_coordinate(ss)
-    
+    if ss.coord == "G"
+        ecliptic2galactic!(ey)
+        ecliptic2galactic!(ez)
+        qb₀ = ecliptic2galactic!(qb₀) # Quaternion structure is not immutable.
+        qd₀ = ecliptic2galactic!(qd₀)
+        qu₀ = ecliptic2galactic!(qu₀)
+        ecliptic2galactic!(spin_axis)
+        ecliptic2galactic!(antisun_axis)
+    end
+    ey           = SVector{3}(ey)
+    ez           = SVector{3}(ez)
+    spin_axis    = SVector{3}(spin_axis)
+    antisun_axis = SVector{3}(antisun_axis)
     @views @inbounds for j = eachindex(ss.quat)
         qp₀ⱼ = qb₀[j]
         @views @inbounds for i = eachindex(time_array)
@@ -585,13 +568,9 @@ function get_pointings_tuple(ss::ScanningStrategy_imo, start, stop)
             Q = qᵣ * qₚ * qₛ
             qp = Q * qp₀ⱼ / Q
             qu = Q * qu₀ / Q
-            
             p = vect(qp)
             u = vect(qu)
-            
-            ell = (p × ez) × p  
-            
-            #θ, ϕ = vec2ang_ver2(p[1], p[2], p[3])
+            ell = (p × ez) × p
             θ, ϕ = vec2ang(p[1], p[2], p[3])
             theta_tod[i, j] = θ
             phi_tod[i, j] = ϕ
@@ -737,111 +716,4 @@ function normarize!(resol::Resolution, maps::Array, hitmap::Array)
         end
     end
     return maps
-end
-
-function imo_channel!(ss::ScanningStrategy_imo, path,;channel)
-    json = JSON.parsefile(path)
-    switch = 0
-    df = ""
-    for i in eachindex(json["data_files"])
-        if haskey(json["data_files"][i]["metadata"], "pixtype") == true
-            boloname = json["data_files"][i]["metadata"]["name"]
-            teles = split.(json["data_files"][i]["metadata"]["channel"], "")[1]
-            ch = json["data_files"][i]["metadata"]["channel"]
-            if ch == channel
-                metadata = json["data_files"][i]["metadata"]
-                if switch == 0
-                    df = DataFrame(permutedims(collect(values(metadata))), collect(keys(metadata)))
-                    switch = 1
-                else
-                    push!(df, collect(values(metadata)))
-                end
-            end
-        end
-    end
-    if df == ""
-         @error "No such channel in the IMo."
-    else
-        ss.quat = Vector{Vector{Float64}}(df.quat)
-        ss.name = df.name
-        ss.info = df
-        println("The channel `$(channel)` is set from IMo.")
-    end
-    return ss
-end
-
-function imo_telescope!(ss::ScanningStrategy_imo, path,;telescope)
-    json = JSON.parsefile(path)
-    switch = 0
-    df = 0
-    for i in eachindex(json["data_files"])
-        if haskey(json["data_files"][i]["metadata"], "pixtype") == true
-            boloname = json["data_files"][i]["metadata"]["name"]
-            teles = split.(json["data_files"][i]["metadata"]["channel"], "")[1]
-            ch = json["data_files"][i]["metadata"]["channel"]
-            if teles == telescope
-                metadata = json["data_files"][i]["metadata"]
-                if switch == 0
-                    df = DataFrame(permutedims(collect(values(metadata))), collect(keys(metadata)))
-                    switch = 1
-                else
-                    push!(df, collect(values(metadata)))
-                end
-            end
-        end
-    end
-    if df == ""
-         @error "No such channel in the IMo."
-    else
-        ss.quat = Vector{Vector{Float64}}(df.quat)
-        ss.name = df.name
-        ss.info = df
-        println("The telescope `$(telescope)FT' is set from IMo.")
-    end
-    return ss
-end
-
-function imo_name!(ss::ScanningStrategy_imo, path,;name::Vector)
-    json = JSON.parsefile(path)
-    switch = 0
-    df = 0
-    for i in eachindex(json["data_files"])
-        if haskey(json["data_files"][i]["metadata"], "pixtype") == true
-            boloname = json["data_files"][i]["metadata"]["name"]
-            teles = split.(json["data_files"][i]["metadata"]["channel"], "")[1]
-            ch = json["data_files"][i]["metadata"]["channel"]
-            for j in eachindex(name)
-                if boloname == name[j]
-                    metadata = json["data_files"][i]["metadata"]
-                    if switch == 0
-                        df = DataFrame(permutedims(collect(values(metadata))), collect(keys(metadata)))
-                        switch = 1
-                    else
-                        push!(df, collect(values(metadata)))
-                    end
-                end
-            end
-        end
-    end
-    if df == ""
-         @error "No such detector in the IMo."
-    else
-        ss.quat = Vector{Vector{Float64}}(df.quat)
-        ss.name = df.name
-        ss.info = df
-        println("The detector `$(name)` is set from IMo.")
-    end
-    return ss
-end
-
-function get_instrument_info(json, inst)
-    instrument_info = ""
-    for i in eachindex(json["data_files"])
-        if json["data_files"][i]["name"] == "instrument_info"
-            if json["data_files"][i]["metadata"]["name"] == inst
-                instrument_info = json["data_files"][i]["metadata"]
-            end
-        end
-    end
-    return instrument_info
 end
