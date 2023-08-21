@@ -32,11 +32,11 @@ where $\Omega$ shows sky pixel and $\xi\equiv\2phi+\psi$ shows effective crossin
 `interp_signal` returns interpolated TOD which is defined pointings i.e. $\theta$ and $\varphi$.
 
 # Map-maker
-`binned_mapmake` is available. 
+The `binned_mapmake` is available. 
 ```julia
 binned_mapmake(ss::ScanningStrategy, division::Int, inputinfo::Falcons.InputInfo, signal)
 ```
-`signal` argument requires a function which has `Pointings` and `PolarizedHealpixMap` as arguments in the order. For example,
+The `signal` argument requires a function which has `Pointings` and `PolarizedHealpixMap` as arguments in the order. For example,
 ```julia
 binned_mapmake(ss::ScanningStrategy, division::Int, inputinfo::Falcons.InputInfo, true_signal)
 ```

@@ -132,14 +132,23 @@ function get_pointings_offset(ss::ScanningStrategy_imo, offset::OffsetAngle, sta
     phi_tod = zeros(loop_times, numof_det)
     pol_tod_xyz = zeros(loop_times, numof_det, 3)
     
-    ey = @SVector [0.0, 1.0, 0.0]
-    ez = @SVector [0.0, 0.0, 1.0]
-    if ss.coord == "G"
-        error("ERROR: \n Garactic coord is not supported now.")
-    end
-
+    ey = [0.0, 1.0, 0.0]
+    ez = [0.0, 0.0, 1.0]
     q_d, q_pol_d, q_scan, spin_axis, antisun_axis = imo2scan_coordinate(ss, offset)
     
+    if ss.coord == "G"
+        ecliptic2galactic!(ey)
+        ecliptic2galactic!(ez)
+        q_d     = ecliptic2galactic!(q_d) # Quaternion structure is not immutable.
+        q_pol_d = ecliptic2galactic!(q_pol_d)
+        q_scan  = ecliptic2galactic!(q_scan)
+        ecliptic2galactic!(spin_axis)
+        ecliptic2galactic!(antisun_axis)
+    end
+    ey           = SVector{3}(ey)
+    ez           = SVector{3}(ez)
+    spin_axis    = SVector{3}(spin_axis)
+    antisun_axis = SVector{3}(antisun_axis)
     @views @inbounds for j = eachindex(ss.quat)
         q_dⱼ = q_d[j]
         @views for i = eachindex(time_array)
@@ -174,26 +183,40 @@ function get_pointings_offset(ss::ScanningStrategy_imo, offset::OffsetAngle, sta
 end    
 
 function get_pol_angle(ss::ScanningStrategy_imo, i::Int)
-    if ss.info.orient[i] == "Q"
-        if ss.info.pol[i] == "T"
-            polang = 0
-        elseif ss.info.pol[i] == "B"
-            polang = π/2
-        end
+    if size(ss.info) == (0,0)
+        # boresight 
+        return 0.
     end
-    if ss.info.orient[i] == "U"
-        if ss.info.pol[i] == "T"
-            polang = π/4
-        elseif ss.info.pol[i] == "B"
-            polang = 3π/4
+    try
+        polang = deg2rad(parse(Float64, ss.info.orient[i]))
+        println("Successfully parsed as Float: ", polang)
+        return polang
+    catch
+        if ss.info.orient[i] == "Q"
+            if ss.info.pol[i] == "T"
+                polang = 0
+            elseif ss.info.pol[i] == "B"
+                polang = π/2
+            end
         end
+        if ss.info.orient[i] == "U"
+            if ss.info.pol[i] == "T"
+                polang = π/4
+            elseif ss.info.pol[i] == "B"
+                polang = 3π/4
+            end
+        end
+        println("Successfully parsed as Float: ", polang)
+        return polang
     end
-    return polang
 end
 
-function sim_pointing_systematics(ss::ScanningStrategy_imo, 
+
+
+function sim_pointing_systematics(ss::ScanningStrategy_imo,
+        nside_out::Int,
         division::Int, 
-        inputinfo::Falcons.InputInfo,
+        inputmap::PolarizedHealpixMap,
         offset::OffsetAngle,;
         signal,
         tod_check=false,
@@ -202,7 +225,8 @@ function sim_pointing_systematics(ss::ScanningStrategy_imo,
     )
     w(ψ,ϕ) = @SMatrix [1 cos(2ψ+4ϕ) sin(2ψ+4ϕ)]
     resol = Resolution(ss.nside)
-    npix = resol.numOfPixels
+    resol_out = Resolution(nside_out)
+    npix = nside2npix(nside_out) #resol.numOfPixels
     chunk = Int(ss.duration / division)
     ω_hwp = rpm2angfreq(ss.hwp_rpm)
     total_signal = zeros(3, 1, npix)
@@ -210,7 +234,6 @@ function sim_pointing_systematics(ss::ScanningStrategy_imo,
     hitmatrix = zeros(3, 3, npix)
     outmap = zeros(3, 1, npix)
     progress = Progress(division)
-    inputmap = inputinfo.Inputmap
     pixbuf = Array{Int}(undef, 4)
     weightbuf = Array{Float64}(undef, 4)
     BEGIN = 0
@@ -230,11 +253,12 @@ function sim_pointing_systematics(ss::ScanningStrategy_imo,
             @inbounds @views for k = eachindex(time)
                 t = time[k]
                 p = pointings(resol, theta_j[k], phi_j[k], psi_j[k], mod2pi(ω_hwp*t)+polang)
+                p_out = pointings(resol_out, theta_j[k], phi_j[k], psi_j[k], mod2pi(ω_hwp*t)+polang)
                 p_err = pointings(resol, theta_e_j[k], phi_e_j[k], psi_e_j[k], mod2pi(ω_hwp*t)+polang+offset.z)
                 dₖ = signal(p_err, inputmap)
-                total_signal[:, :, p.Ω] .+= @SMatrix [dₖ; dₖ*cos(2p.ξ); dₖ*sin(2p.ξ)]
-                hitmatrix[:, :, p.Ω] .+= transpose(w(p.ψ, p.ϕ)) * w(p.ψ, p.ϕ)
-                hitmap[p.Ω] += 1
+                total_signal[:, :, p_out.Ω] .+= @SMatrix [dₖ; dₖ*cos(2p.ξ); dₖ*sin(2p.ξ)]
+                hitmatrix[:, :, p_out.Ω] .+= transpose(w(p.ψ, p.ϕ)) * w(p.ψ, p.ϕ)
+                hitmap[p_out.Ω] += 1
             end
         end
         BEGIN = END
@@ -248,7 +272,6 @@ function sim_pointing_systematics(ss::ScanningStrategy_imo,
         end
     end
     outmap = transpose([outmap[1,1,:] outmap[2,1,:] outmap[3,1,:]])
-    
     if tod_check == true
         theta, phi, psi, time = get_pointings_offset(ss, no_offset, start_time, end_time)
         theta_e, phi_e, psi_e, time_e = get_pointings_offset(ss, offset, start_time, end_time)
@@ -262,12 +285,7 @@ function sim_pointing_systematics(ss::ScanningStrategy_imo,
                 t = time[k]
                 p = pointings(resol, theta[k,j], phi[k,j], psi[k,j], ω_hwp*t)
                 p_err = pointings(resol, theta_e[k,j], phi_e[k,j], psi_e[k,j], ω_hwp*t)
-                
                 pol_ang[k,j] = p_err.ξ
-                #d_true = signal(p, inputmap)
-                #d_true_interp = interp_signal(p, inputmap)
-                #d_err = signal(p_err, inputmap)
-                
                 tod_true[k,j] = signal(p, inputmap)
                 tod_err[k,j] = signal(p_err, inputmap)
                 tod_true_interp[k,j] = interp_signal(p, inputmap)

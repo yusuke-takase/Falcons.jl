@@ -7,7 +7,7 @@ function gen_imo(path)
     return Imo(imo)
 end
 
-function get_channel_info(imo::Imo)
+function get_channel_list(imo::Imo)
     channel_info = []
     for i in eachindex(imo.imo["data_files"])
         if imo.imo["data_files"][i]["name"] == "channel_info"
@@ -17,6 +17,38 @@ function get_channel_info(imo::Imo)
     end
     return reverse(channel_info)
 end
+
+function get_channel_info(imo::Imo)
+    df = DataFrame()  # 空のDataFrameを初期化
+    
+    for i in eachindex(imo.imo["data_files"])
+        if imo.imo["data_files"][i]["name"] == "channel_info"
+            metadata = imo.imo["data_files"][i]["metadata"]
+            metadata_keys = keys(metadata)
+            
+            keys_to_exclude = Set(["detector_objs", "detector_names"])
+            filtered_metadata = Dict(
+                key => value for (key, value) in metadata if !(key in keys_to_exclude)
+            )
+            
+            if isempty(df)
+                df = DataFrame(permutedims(collect(values(filtered_metadata))), collect(keys(filtered_metadata)))
+            else
+                push!(df, collect(values(filtered_metadata)))
+            end
+        end
+    end
+    sort!(df, :bandcenter_ghz)
+    return df
+end
+
+function get_channel_info(imo::Imo, channel_name::String)
+    df = get_channel_info(imo)
+    channel_info = filter(row -> row.channel == channel_name, df)
+    return channel_info
+end
+    
+    
 
 function imo_channel!(ss::ScanningStrategy_imo, imo::Imo,; channel)
     switch = 0
@@ -105,7 +137,11 @@ function imo_name!(ss::ScanningStrategy_imo, imo::Imo,;name::Vector)
         ss.quat = Vector{Vector{Float64}}(df.quat)
         ss.name = df.name
         ss.info = df
-        println("The detector `$(name)` is set from IMo.")
+        println("The detector")
+        for i in eachindex(ss.name)
+            println("     `$(ss.name[i])`")
+        end
+        println("is set from IMo.")
     end
     return ss
 end
