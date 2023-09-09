@@ -12,7 +12,6 @@ using SkyCoords
 using Printf
 using Statistics
 using NaNStatistics
-using HDF5
 
 include("./function/scanning.jl")
 include("./function/imo.jl")
