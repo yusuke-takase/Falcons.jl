@@ -47,10 +47,8 @@ function get_channel_info(imo::Imo, channel_name::String)
     channel_info = filter(row -> row.channel == channel_name, df)
     return channel_info
 end
-    
-    
 
-function imo_channel!(ss::ScanningStrategy_imo, imo::Imo,; channel)
+function imo_channel!(ss::ScanningStrategy, imo::Imo,; channel)
     switch = 0
     df = ""
     for i in eachindex(imo.imo["data_files"])
@@ -75,12 +73,12 @@ function imo_channel!(ss::ScanningStrategy_imo, imo::Imo,; channel)
         ss.quat = Vector{Vector{Float64}}(df.quat)
         ss.name = df.name
         ss.info = df
-        println("The channel `$(channel)` is set from IMo.")
+        #println("The channel `$(channel)` is set from IMo.")
     end
     return ss
 end
 
-function imo_telescope!(ss::ScanningStrategy_imo, imo::Imo,;telescope)
+function imo_telescope!(ss::ScanningStrategy, imo::Imo,;telescope)
     switch = 0
     df = 0
     for i in eachindex(imo.imo["data_files"])
@@ -105,12 +103,12 @@ function imo_telescope!(ss::ScanningStrategy_imo, imo::Imo,;telescope)
         ss.quat = Vector{Vector{Float64}}(df.quat)
         ss.name = df.name
         ss.info = df
-        println("The telescope `$(telescope)FT' is set from IMo.")
+        #println("The telescope `$(telescope)FT' is set from IMo.")
     end
     return ss
 end
 
-function imo_name!(ss::ScanningStrategy_imo, imo::Imo,;name::Vector)
+function imo_name!(ss::ScanningStrategy, imo::Imo,;name::Vector)
     switch = 0
     df = 0
     for i in eachindex(imo.imo["data_files"])
@@ -137,16 +135,16 @@ function imo_name!(ss::ScanningStrategy_imo, imo::Imo,;name::Vector)
         ss.quat = Vector{Vector{Float64}}(df.quat)
         ss.name = df.name
         ss.info = df
-        println("The detector")
-        for i in eachindex(ss.name)
-            println("     `$(ss.name[i])`")
-        end
-        println("is set from IMo.")
+        #println("The detector")
+        #for i in eachindex(ss.name)
+        #    println("     `$(ss.name[i])`")
+        #end
+        #println("is set from IMo.")
     end
     return ss
 end
 
-function get_det(path)
+function get_detectors(path)
     bolonames = []
     open(path) do file
         for (index, line) in enumerate(eachline(file))
@@ -172,4 +170,31 @@ function get_instrument_info(imo::Imo, inst)
         end
     end
     return instrument_info
+end
+
+function get_pol_angle(ss::ScanningStrategy, i::Int)
+    if size(ss.info) == (0,0)
+        # boresight 
+        return 0.
+    end
+    try
+        polang = deg2rad(parse(Float64, ss.info.orient[i]))
+        return polang
+    catch
+        if ss.info.orient[i] == "Q"
+            if ss.info.pol[i] == "T"
+                polang = 0
+            elseif ss.info.pol[i] == "B"
+                polang = π/2
+            end
+        end
+        if ss.info.orient[i] == "U"
+            if ss.info.pol[i] == "T"
+                polang = π/4
+            elseif ss.info.pol[i] == "B"
+                polang = 3π/4
+            end
+        end
+        return polang
+    end
 end

@@ -7,15 +7,15 @@ year = day * 365
 t = 100
 
 function test_wo_imo()
-    ss = gen_ScanningStrategy(duration=t)
+    ss_tp = gen_ScanningStrategy_ThetaPhi(duration=t)
     @testset "ScanningStrategy_structure-Test" begin
-        @test typeof(ss) <: ScanningStrategy
-        @show fieldnames(ScanningStrategy)
-        println("Test ScanningStrategy ==> ", ss)
+        @test typeof(ss_tp) <: ScanningStrategy_ThetaPhi
+        @show fieldnames(ScanningStrategy_ThetaPhi)
+        println("Test ScanningStrategy_ThetaPhi ==> ", ss_tp)
     end
 
-    @testset "get_pointings_tuple-Test" begin
-        pointings = get_pointings_tuple(ss, 0, t)
+    @testset "get_pointings-Test" begin
+        pointings = get_pointings(ss_tp, 0, t)
         @test typeof(pointings[1]) <: Matrix
         @test typeof(pointings[2]) <: Matrix
         @test typeof(pointings[3]) <: Matrix
@@ -23,15 +23,15 @@ function test_wo_imo()
 end
 
 function test_w_imo(imo_path)
-    ss_imo = gen_ScanningStrategy_imo(duration=t)
+    ss_imo = gen_ScanningStrategy(duration=t)
     @testset "gen_imo-Test" begin
         imo = gen_imo(imo_path)
         @test typeof(imo)<:Imo
     end
     
-    @testset "get_pointings_tuple (IMo ver.) -Test" begin
+    @testset "get_pointings (IMo ver.) -Test" begin
         imo = gen_imo(imo_path)
-        pointings = get_pointings_tuple(ss_imo, 0, t)
+        pointings = get_pointings(ss_imo, 0, t)
         @test typeof(pointings[1]) <: Matrix
         @test typeof(pointings[2]) <: Matrix
         @test typeof(pointings[3]) <: Matrix
@@ -62,7 +62,3 @@ if imo_test == "y"
 else
     test_wo_imo()
 end
-
-
-
-    

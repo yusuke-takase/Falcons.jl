@@ -119,7 +119,7 @@ function get_hn_map(SS::ScanningStrategy,; division::Int, nmax=5)
     return outmap
 end
 
-
+#=
 function ScanningStrategy2MapInfo(ss::ScanningStrategy, division::Int)
     """
     Nonte:
@@ -187,6 +187,7 @@ function ScanningStrategy2MapInfo(ss::ScanningStrategy, division::Int)
         )
     return outmap
 end
+=#
 
 function get_psiDataBase(ss::ScanningStrategy,; division::Int, idx, map_div)
     resol = Resolution(ss.nside)
@@ -314,8 +315,11 @@ function binned_mapmake(ss::ScanningStrategy, division::Int, inputinfo::Falcons.
     end
     normarize!(resol, total_signal, hitmap)
     normarize!(resol, hitmatrix, hitmap)
-    @inbounds @threads for j = 1:npix
-        outmap[:, :, j] = hitmatrix[:, :, j] \ total_signal[:, :, j]
+    @inbounds @threads for j = eachindex(hitmatrix[1, 1, :])
+        det_value = det(hitmatrix[:, :, j])
+        if !isnan(det_value) && !isinf(det_value) && det_value != 0
+            outmap[:, :, j] = hitmatrix[:, :, j] \ total_signal[:, :, j]
+        end
     end
     outmap = transpose([outmap[1,1,:] outmap[2,1,:] outmap[3,1,:]])
     return outmap, hitmap

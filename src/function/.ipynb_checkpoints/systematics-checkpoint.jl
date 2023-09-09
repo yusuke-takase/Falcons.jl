@@ -119,7 +119,7 @@ function get_hn_map(SS::ScanningStrategy,; division::Int, nmax=5)
     return outmap
 end
 
-
+#=
 function ScanningStrategy2MapInfo(ss::ScanningStrategy, division::Int)
     """
     Nonte:
@@ -187,6 +187,7 @@ function ScanningStrategy2MapInfo(ss::ScanningStrategy, division::Int)
         )
     return outmap
 end
+=#
 
 function get_psiDataBase(ss::ScanningStrategy,; division::Int, idx, map_div)
     resol = Resolution(ss.nside)
@@ -279,7 +280,7 @@ end
 
 w(ψ,ϕ) = @SMatrix [1 cos(2ψ+4ϕ) sin(2ψ+4ϕ)]
 
-function binned_mapmake(ss::ScanningStrategy, division::Int, inputinfo::Falcons.InputInfo, signal)    
+function binned_mapmake(ss::ScanningStrategy, division::Int, inputinfo::Falcons.InputInfo, signal)
     resol = Resolution(ss.nside)
     npix = resol.numOfPixels
     chunk = Int(ss.duration / division)
@@ -314,14 +315,17 @@ function binned_mapmake(ss::ScanningStrategy, division::Int, inputinfo::Falcons.
     end
     normarize!(resol, total_signal, hitmap)
     normarize!(resol, hitmatrix, hitmap)
-    @inbounds @threads for j = 1:npix
-        outmap[:, :, j] = hitmatrix[:, :, j] \ total_signal[:, :, j]
+    @inbounds @threads for j = eachindex(hitmatrix[1, 1, :])
+        det_value = det(hitmatrix[:, :, j])
+        if !isnan(det_value) && !isinf(det_value) && det_value != 0
+            outmap[:, :, j] = hitmatrix[:, :, j] \ total_signal[:, :, j]
+        end
     end
     outmap = transpose([outmap[1,1,:] outmap[2,1,:] outmap[3,1,:]])
     return outmap, hitmap
 end
 
-
+#=
 function signal(p::pointings, maps::PolarizedHealpixMap, pixbuf, weightbuf)
     maps.i[p.Ω] + maps.q[p.Ω]*cos(2p.ψ+4p.ϕ) + maps.u[p.Ω]*sin(2p.ψ+4p.ϕ)
 end
@@ -341,3 +345,4 @@ function interp_signal(p::pointings, maps::PolarizedHealpixMap, pixbuf, weightbu
     u = interpolate(maps.u, p.θ, p.φ, pixbuf, weightbuf)
     return i + q*cos(2p.ψ+4p.ϕ) + u*sin(2p.ψ+4p.ϕ)
 end
+=#
