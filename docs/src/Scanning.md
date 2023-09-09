@@ -2,20 +2,22 @@
 
 To define the scanning strategy for a satellite, set the `ScanningStrategy` structure.
 ```julia
-mutable struct ScanningStrategy{T<:AbstractFloat, I<:Int, AA<:AbstractArray{T}, AS<:AbstractString}
+mutable struct ScanningStrategy{T<:AbstractFloat, I<:Int, AS<:AbstractString}
     nside::I
     duration::I
     sampling_rate::T
     alpha::T
     beta::T
+    gamma::T
     prec_rpm::T
     spin_rpm::T
     hwp_rpm::T
-    FP_theta::AA
-    FP_phi::AA
     start_point::AS
     start_angle::T
     coord::AS
+    quat::Vector{Vector{Float64}}
+    name::Vector{String}
+    info::DataFrame
 end
 ```
 You can generate `ScanningStrategy` structure using `gen_ScanningStrategy()` function.
