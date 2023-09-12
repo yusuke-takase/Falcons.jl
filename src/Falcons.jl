@@ -13,8 +13,6 @@ using Printf
 using Statistics
 using NaNStatistics
 
-using NPZ
-
 include("./function/scanning.jl")
 include("./function/imo.jl")
 include("./function/systematics.jl")
