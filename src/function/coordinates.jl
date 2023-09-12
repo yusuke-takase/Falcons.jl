@@ -16,25 +16,6 @@ function rotate_vec_ecl_to_gal_coordinates!(v::Vector{<:AbstractFloat},; equinox
     v       .= v_gal
     return v
 end
-#=
-function ecliptic2galactic!(q::Quaternion,; equinox = EQUINOX)
-    θ, ϕ     = vec2ang(q.q1, q.q2, q.q3)
-    ra, dec  = thetaPhi2RaDec(θ, ϕ)
-    ecliptic = EclipticCoords{equinox}(ra, dec)
-    gal      = convert(GalCoords, ecliptic)
-    θ_gal, ϕ_gal = π/2 - gal.b, gal.l
-    x,y,z    = ang2vec(θ_gal, ϕ_gal)
-    q_gal    = Quaternion(0, x, y, z)
-    return q_gal
-end
-
-function ecliptic2galactic!(q::Vector{Quaternion{Float64}})
-    for i in eachindex(q)
-        q[i] = ecliptic2galactic!(q[i])
-    end
-    return q
-end
-=#
 
 x_axis_vec_gal = rotate_vec_ecl_to_gal_coordinates!([1.,0.,0.], equinox = EQUINOX) 
 y_axis_vec_gal = rotate_vec_ecl_to_gal_coordinates!([0.,1.,0.], equinox = EQUINOX) 
@@ -68,7 +49,7 @@ function _ang2galvec_one_sample(theta, phi)
     v =  SVector{3,Float64}([st * cos(phi); st * sin(phi); cos(theta)])
     return rotmatr * v
 end
-
+#=
 function _vec2ang_for_one_sample(vx, vy, vz)
     """Transform a vector to angle given by theta,phi.
 
@@ -93,7 +74,7 @@ function _vec2ang_for_one_sample(vx, vy, vz)
 
     return (atan(sqrt(vx^2 + vy^2), vz), atan(vy, vx))
 end
-
+=#
 function _rotate_coordinates_and_pol_e2g_for_one_sample(theta_ecl, phi_ecl, pol_angle_ecl)
     """
     Rotate the angles theta,phi and psi from ecliptic to galactic coordinates
@@ -120,15 +101,9 @@ function _rotate_coordinates_and_pol_e2g_for_one_sample(theta_ecl, phi_ecl, pol_
     """
 
     vec = _ang2galvec_one_sample(theta_ecl, phi_ecl)
-    theta_gal, phi_gal = _vec2ang_for_one_sample(vec[1], vec[2], vec[3])
-
+    theta_gal, phi_gal = vec2ang(vec[1], vec[2], vec[3])
     sinalpha = NORTH_POLE_VEC[1] * vec[2] - NORTH_POLE_VEC[2] * vec[1]
     cosalpha = NORTH_POLE_VEC[3] - vec[3] * (NORTH_POLE_VEC ⋅ vec)
-    #* (
-    #    NORTH_POLE_VEC[1] * vec[1]
-    #    + NORTH_POLE_VEC[2] * vec[2]
-    #    + NORTH_POLE_VEC[3] * vec[3]
-    #)
     pol_angle_gal = pol_angle_ecl + atan(sinalpha, cosalpha)
 
     return (theta_gal, phi_gal, pol_angle_gal)

@@ -62,3 +62,5 @@ if imo_test == "y"
 else
     test_wo_imo()
 end
+
+test_wo_imo()

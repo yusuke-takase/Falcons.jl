@@ -7,6 +7,14 @@ function true_signal(p::Pointings, maps::PolarizedHealpixMap)
 end
 
 function interp_signal(p::Pointings, maps::PolarizedHealpixMap)
+    #= 
+    Note that 0 <= p.θ <= π, 0 <= p.φ <=2π  are required. 
+    Normal vec2ang() will keep this range, but vec2ang_lbsim_phi() doesn't keep it. 
+    If you use vec2ang_lbsim_phi(), the bounds error will happen in the interpolate(). 
+    =#
+    (0 ≤ p.θ ≤ π)  || throw(DomainError(p.θ, "Invalid value of theta, detected value was $(p.θ)"))
+    (0 ≤ p.φ ≤ 2π) || throw(DomainError(p.φ, "Invalid value of phi, detected value was $(p.φ)"))
+    
     i = interpolate(maps.i, p.θ, p.φ)
     q = interpolate(maps.q, p.θ, p.φ)
     u = interpolate(maps.u, p.θ, p.φ)
@@ -20,6 +28,7 @@ function interp_signal(p::Pointings, maps::PolarizedHealpixMap, pixbuf, weightbu
     u = interpolate(maps.u, p.θ, p.φ, pixbuf, weightbuf)
     return i + q*cos(2p.ξ) + u*sin(2p.ξ)
 end
+
 
 function gen_signalfield(resol::Resolution, maps::PolarizedHealpixMap)
     alm_i = hp.map2alm(maps.i.pixels)
@@ -94,19 +103,27 @@ function imo2ecl_coordinates(ss::ScanningStrategy, offset::OffsetAngles)
                 #q_gamma = rotate_quat(deg2rad(30), ez)
                 q_gamma = rotate_quat(deg2rad(ss.gamma), ez)
             end  
-            Q = rotate_quat(deg2rad(ss.beta), ey) * q_gamma * q_imo
+            Q = rotate_quat(deg2rad(ss.beta), ey) * q_offset * q_gamma * q_imo
             if telescope == "001" #MFT
                 Q = rotate_quat(π, ez) * Q
             elseif telescope == "002" #HFT
                 Q = rotate_quat(π, ez) * Q
             end
-            Q              = rotate_quat(deg2rad(ss.beta), ey) *  q_offset * q_gamma * q_imo
+            #Q              = rotate_quat(deg2rad(ss.beta), ey) *  q_offset * q_gamma * q_imo
+            #Q              = rotate_quat(deg2rad(ss.beta), ey) * Q
+            Q              = rotate_quat(deg2rad(90.0-ss.alpha), ey) * Q 
             q_dets[i]      = Q * q_boresight / Q
             q_pol_dets[i]  = Q * q_pol / Q
         end
     end
     return (q_dets, q_pol_dets)
 end
+
+#=
+function save_arrays(filename::AbstractString, theta::AbstractArray, phi::AbstractArray, psi::AbstractArray, time::AbstractArray)
+    npzwrite(filename, Dict("theta" => theta, "phi" => phi, "psi" => psi, "time" => time))
+end
+=#
 
 function get_pointings_offset(ss::ScanningStrategy, offset::OffsetAngles, start, stop)
     resol = Resolution(ss.nside)
@@ -128,7 +145,7 @@ function get_pointings_offset(ss::ScanningStrategy, offset::OffsetAngles, start,
     ey = @SVector [0.0, 1.0, 0.0]
     ez = @SVector [0.0, 0.0, 1.0]
     spin_axis = @SVector [cosd(ss.alpha), 0, sind(ss.alpha)]
-    q_scan_direction             = Quaternion(0.,0.,1.,0.)
+    q_scan_direction     = Quaternion(0.,0.,1.,0.)
     q_point, q_pol_angle = imo2ecl_coordinates(ss, offset) # This line is only different from get_pointings()
     @views @inbounds for i = eachindex(ss.quat)
         q_point_idet     = q_point[i]
@@ -146,7 +163,8 @@ function get_pointings_offset(ss::ScanningStrategy, offset::OffsetAngles, start,
             vec_point      = vect(q_point_t)
             poldir         = vect(q_pol_t)
             
-            θ, ϕ           = vec2ang_lbsim_phi(vec_point[1], vec_point[2], vec_point[3])
+            #θ, ϕ           = vec2ang_minuspi_to_pi(vec_point[1], vec_point[2], vec_point[3])
+            θ, ϕ           = vec2ang(vec_point[1], vec_point[2], vec_point[3])
             theta_tod[j,i] = θ
             phi_tod[j,i]   = ϕ            
             psi_tod[j,i]   = polarization_angle(θ, ϕ, poldir)
@@ -157,7 +175,6 @@ function get_pointings_offset(ss::ScanningStrategy, offset::OffsetAngles, start,
     end
     return (theta_tod, phi_tod, psi_tod, time_array)
 end
-
 
 
 function sim_pointing_systematics(ss::ScanningStrategy,
@@ -190,6 +207,7 @@ function sim_pointing_systematics(ss::ScanningStrategy,
         theta, phi, psi, time         = get_pointings_offset(ss, no_offset, BEGIN, END)
         theta_e, phi_e, psi_e, time_e = get_pointings_offset(ss, offset, BEGIN, END)
         @views @inbounds for j = eachindex(ss.quat)
+            @warn "Det: $(ss.name[j]) will run."
             theta_j   = theta[:,j]
             phi_j     = phi[:,j]
             psi_j     = psi[:,j]
@@ -199,9 +217,23 @@ function sim_pointing_systematics(ss::ScanningStrategy,
             polang    = get_pol_angle(ss, j)
             @inbounds @views for k = eachindex(time)
                 t     = time[k]
-                p     = pointings(resol, theta_j[k], phi_j[k], psi_j[k], mod2pi(ω_hwp*t)+polang)
+                p     = pointings(resol,     theta_j[k], phi_j[k], psi_j[k], mod2pi(ω_hwp*t)+polang)
                 p_out = pointings(resol_out, theta_j[k], phi_j[k], psi_j[k], mod2pi(ω_hwp*t)+polang)
-                p_err = pointings(resol, theta_e_j[k], phi_e_j[k], psi_e_j[k], mod2pi(ω_hwp*t)+polang+offset.z)
+                p_err = pointings(resol,     theta_e_j[k], phi_e_j[k], psi_e_j[k], mod2pi(ω_hwp*t)+polang+offset.z)
+                #=
+                try 
+                    signal(p_err, inputmap)
+                catch
+                    @warn "Det: $(ss.name[j]) is running. "
+                    @warn "p_err = $(p_err)"
+                    @warn "time = $t"
+                    @warn "BEGIN = $BEGIN"
+                    @warn "END = $END"
+                    filename = "./debug_theta_phi.npz"
+                    npzwrite(filename, Dict("theta" => theta_e_j, "phi" => phi_e_j, "psi" => psi_e_j, "time" => time))
+                    #np.savez_compressed("./debug_theta_phi.npz", theta=theta_e_j, phi=phi_e_j, psi=psi_e_j, time=time)
+                end
+                =#
                 dₖ    = signal(p_err, inputmap)
                 total_signal[:, :, p_out.Ω] .+= @SMatrix [dₖ; dₖ*cos(2p.ξ); dₖ*sin(2p.ξ)]
                 hitmatrix[:, :, p_out.Ω]    .+= transpose(w(p.ψ, p.ϕ)) * w(p.ψ, p.ϕ)

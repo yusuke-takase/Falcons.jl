@@ -13,6 +13,8 @@ using Printf
 using Statistics
 using NaNStatistics
 
+using NPZ
+
 include("./function/scanning.jl")
 include("./function/imo.jl")
 include("./function/systematics.jl")
@@ -32,7 +34,7 @@ export angtod2hitmap, pixtod2hitmap, normarize!
 export Imo, gen_imo
 export get_channel_list, get_channel_info, get_detectors
 export imo_telescope!, imo_channel!, imo_name!, get_instrument_info
-export get_pol_angle
+export get_pol_angle, imo2ecl_coordinates
 
 # systematics.jl 
 export set_input, orientation_func, get_hn_map

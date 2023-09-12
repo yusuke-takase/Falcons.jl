@@ -84,7 +84,7 @@ function imo_telescope!(ss::ScanningStrategy, imo::Imo,;telescope)
     for i in eachindex(imo.imo["data_files"])
         if haskey(imo.imo["data_files"][i]["metadata"], "pixtype") == true
             boloname = imo.imo["data_files"][i]["metadata"]["name"]
-            teles = split.(imo.imo["data_files"][i]["metadata"]["channel"], "")[1]
+            teles = split.(imo.imo["data_files"][i]["metadata"]["channel"], "")[1] * "FT"
             ch = imo.imo["data_files"][i]["metadata"]["channel"]
             if teles == telescope
                 metadata = imo.imo["data_files"][i]["metadata"]

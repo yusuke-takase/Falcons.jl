@@ -1,4 +1,4 @@
-@inline function vec2ang_lbsim_phi(x, y, z)
+@inline function vec2ang_minuspi_to_pi(x, y, z)
     norm = sqrt(x^2 + y^2 + z^2)
     theta = acos(z / norm)
     phi = atan(y, x)
@@ -8,7 +8,7 @@ end
 
 @inline function rotate_quat(omega, t, rotate_axis)
     #= Generate a quaternion that rotates by the angle omega*t around the rotate_axis axis. =#
-    rot_ang = omega * t
+    rot_ang = mod2pi(omega * t)
     Quaternion([cos(rot_ang/2.0), rotate_axis[1]*sin(rot_ang/2.0), rotate_axis[2]*sin(rot_ang/2.0), rotate_axis[3]*sin(rot_ang/2.0)])
 end
 
@@ -216,7 +216,7 @@ function get_pointings(ss::ScanningStrategy, start, stop)
     ey = @SVector [0.0, 1.0, 0.0]
     ez = @SVector [0.0, 0.0, 1.0]
     spin_axis = @SVector [cosd(ss.alpha), 0, sind(ss.alpha)]
-    q_scan_direction             = Quaternion(0.,0.,1.,0.)
+    q_scan_direction     = Quaternion(0.,0.,1.,0.)
     q_point, q_pol_angle = imo2ecl_coordinates(ss)
     @views @inbounds for i = eachindex(ss.quat)
         q_point_idet     = q_point[i]
@@ -234,7 +234,8 @@ function get_pointings(ss::ScanningStrategy, start, stop)
             vec_point      = vect(q_point_t)
             poldir         = vect(q_pol_t)
             
-            θ, ϕ           = vec2ang_lbsim_phi(vec_point[1], vec_point[2], vec_point[3])
+            #θ, ϕ           = vec2ang_minuspi_to_pi(vec_point[1], vec_point[2], vec_point[3])
+            θ, ϕ           = vec2ang(vec_point[1], vec_point[2], vec_point[3])
             theta_tod[j,i] = θ
             phi_tod[j,i]   = ϕ            
             psi_tod[j,i]   = polarization_angle(θ, ϕ, poldir)
@@ -270,7 +271,7 @@ This function will return pointing pixel tod as tuple.
     ...
 """
 @inline function get_pointing_pixels(ss, start, stop)
-    theta_tod, phi_tod, psi_tod, time_array = get_pointings_tuple(ss, start, stop)
+    theta_tod, phi_tod, psi_tod, time_array = get_pointings(ss, start, stop)
     loop_times = length(theta_tod[:,1])
     numOfdet = length(theta_tod[1,:])
     resol = Resolution(ss.nside)
@@ -469,8 +470,6 @@ function get_pointings(ss::ScanningStrategy_ThetaPhi, start, stop)
             u = vect(qu)
             
             ell = (p × ez) × p  
-            
-            #θ, ϕ = vec2ang_ver2(p[1], p[2], p[3])
             θ, ϕ = vec2ang(p[1], p[2], p[3])
             theta_tod[i, j] = θ
             phi_tod[i, j] = ϕ

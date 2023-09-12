@@ -63,7 +63,7 @@ function get_scanfield(ss::ScanningStrategy,; division, spin_n, spin_m)
             theta_j = theta[:,j]
             phi_j   = phi[:,j]
             psi_j   = psi[:,j]
-            polang   = get_pol_angle(ss, j)
+            polang  = get_pol_angle(ss, j)
             @views @inbounds for k = eachindex(time)
                 t = time[k]
                 p = pointings(resol, theta_j[k], phi_j[k], psi_j[k], mod2pi(ω_hwp*t)+polang)
