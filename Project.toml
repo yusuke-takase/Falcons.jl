@@ -1,7 +1,7 @@
 name = "Falcons"
 uuid = "eba0fb4b-2daf-4740-90d2-e5655143e0a0"
 authors = ["Yusuke Takase <takase_y@s.okayama-u.ac.jp>"]
-version = "1.0.0"
+version = "1.0.1"
 
 [deps]
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
