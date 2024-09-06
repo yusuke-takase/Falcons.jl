@@ -49,32 +49,7 @@ function _ang2galvec_one_sample(theta, phi)
     v =  SVector{3,Float64}([st * cos(phi); st * sin(phi); cos(theta)])
     return rotmatr * v
 end
-#=
-function _vec2ang_for_one_sample(vx, vy, vz)
-    """Transform a vector to angle given by theta,phi.
 
-    Parameters
-    ----------
-    vx : float, scalar
-      The x component of the vector (scalar)
-    vy : float, scalar
-      The y component of the vector (scalar))
-    vz : float, scalar
-      The z component of the vector (scalar)
-
-    Returns
-    -------
-    theta, phi : float
-      A tuple containing the value of the colatitude and of the longitude
-
-    See Also
-    --------
-    https://github.com/healpy/healpy/blob/main/healpy/rotator.py#L610
-    """
-
-    return (atan(sqrt(vx^2 + vy^2), vz), atan(vy, vx))
-end
-=#
 function _rotate_coordinates_and_pol_e2g_for_one_sample(theta_ecl, phi_ecl, pol_angle_ecl)
     """
     Rotate the angles theta,phi and psi from ecliptic to galactic coordinates

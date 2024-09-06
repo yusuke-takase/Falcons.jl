@@ -235,9 +235,8 @@ function get_psi_time_DataBase(ss::ScanningStrategy,; division::Int, idx, map_di
     idxはマップ(npix)をRingOrderでmap_div*nside個の領域に分割したときに北極から順に貼られるインデックス
     map_divはマップをmap_div*nside個に分割するためのパラメータ(4くらいがいい)
     =#
-    
     resol = Resolution(ss.nside)
-    npix = nside2npix(ss.nside)
+    npix  = nside2npix(ss.nside)
     map_division = map_div*ss.nside
     println("To get a psi database in full-sky, specify idx in the range of [1, $map_division] and run the job.")
     
@@ -277,6 +276,55 @@ function get_psi_time_DataBase(ss::ScanningStrategy,; division::Int, idx, map_di
     end
     return (map_div, idx, psi_db, time_db)
 end
+
+
+function get_psi_database(ss::ScanningStrategy,; division::Int, idx, map_div)
+    #=
+    divisionはtodの分割計算
+    idxはマップ(npix)をRingOrderでmap_div*nside個の領域に分割したときに北極から順に貼られるインデックス
+    map_divはマップをmap_div*nside個に分割するためのパラメータ(4くらいがいい)
+    =#
+    resol = Resolution(ss.nside)
+    npix  = nside2npix(ss.nside)
+    map_division = map_div*ss.nside
+    println("To get a psi database in full-sky, specify idx in the range of [1, $map_division] and run the job.")
+    
+    split   = npix/map_division
+    month   = Int(ss.duration / division)
+    ω_hwp   = rpm2angfreq(ss.hwp_rpm)
+    psi_db  = [Float32[] for i in 1:split]
+    time_db = [Float32[] for i in 1:split]
+    under   = Int(split*(idx-1))
+    upper   = Int(split*idx)
+    
+    println("ipix_range = [$(under+1),$upper]")
+    BEGIN    = 0
+    progress = Progress(division)
+    @views @inbounds for i = 1:division
+        END = i * month
+        theta, phi, psi, time = get_pointings(ss, BEGIN, END)
+        @views @inbounds for j = eachindex(ss.quat)
+            theta_j   = theta[:,j]
+            phi_j     = phi[:,j]
+            psi_j     = psi[:,j]
+            polang    = get_pol_angle(ss, j)
+            @views @inbounds @simd for k = eachindex(time)
+                t = time[k]
+                p = pointings(resol, theta_j[k], phi_j[k], psi_j[k], mod2pi(ω_hwp*t)+polang)
+                if under < p.Ω <= upper
+                    push!(psi_db[p.Ω - under],  Float32(p.ψ))
+                    push!(time_db[p.Ω - under], Float32(t))
+                end
+            end
+        end
+        #println("Data size psi: ", sizeof(psi_db))
+        #println("Data size time: ", sizeof(time_db))
+        BEGIN = END
+        next!(progress)
+    end
+    return (map_div, idx, psi_db, time_db)
+end
+
 
 w(ψ,ϕ) = @SMatrix [1 cos(2ψ+4ϕ) sin(2ψ+4ϕ)]
 

@@ -20,7 +20,7 @@ function h_nm(hₙₘ::Array, spin_n::Vector, spin_m::Vector, n::Int, m::Int)
 end
 
 function get_hnm_quantify(hₙₘ, spin_n, spin_m)
-    df = DataFrame(n            = repeat(spin_n, inner=length(spin_m)), 
+    df = DataFrame(n            = repeat(spin_n, inner=length(spin_m)),
                    m            = repeat(spin_m, outer=length(spin_n)),
                    mean         = zeros(length(spin_n)*length(spin_m)),
                    std          = zeros(length(spin_n)*length(spin_m)),
@@ -53,7 +53,7 @@ function get_scanfield(ss::ScanningStrategy,; division, spin_n, spin_m)
     chunk  = Int(ss.duration / division)
     ω_hwp  = rpm2angfreq(ss.hwp_rpm)
     hitmap = zeros(Int64, npix)
-    hₙₘ     = zeros(Complex{Float32}, (length(spin_n), length(spin_m), npix))
+    hₙₘ     = zeros(Complex{Float64}, (length(spin_n), length(spin_m), npix))
     BEGIN  = 0
     progress = Progress(division)
     @views @inbounds for i = 1:division

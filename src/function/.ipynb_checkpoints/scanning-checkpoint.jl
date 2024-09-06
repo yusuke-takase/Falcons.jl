@@ -126,6 +126,42 @@ function gen_ScanningStrategy(;
     )
 end
 
+function get_satellite(satellite)
+    six_month_min = 24*60*60*(365.25/2)/60
+    four_day_min  = 24*60*60*4/60
+    satellites = ["WMAP", "Planck",      "PICO", "CORE",       "EPIC" , "LiteBIRD"]
+    Alpha      = [70.,    7.5,           26,     30,            45    , 45        ]
+    Beta       = [22.5,   85,            69,     65,            55    , 50        ]
+    T_alpha    = [60.,    six_month_min, 10*60,  four_day_min,  3.2*60, 192.348   ] # min 
+    T_beta     = [129/60, 1,             1,      2,             1     , 20.       ] # min
+    
+    if satellite in satellites
+        # 該当する衛星のindexを返す
+        idx = findfirst(x -> x == satellite, satellites)
+    else
+        # 衛星が見つからない場合はエラーメッセージを返す
+        return "Satellite not found in the list."
+    end
+    ss = gen_ScanningStrategy(;
+            nside=128, 
+            duration=60*60*24*365, 
+            sampling_rate=1.0,
+            alpha=Alpha[idx],
+            beta=Beta[idx], 
+            gamma=0,
+            prec_rpm=period2rpm(T_alpha[idx]), 
+            spin_rpm=period2rpm(T_beta[idx]), 
+            hwp_rpm=0, 
+            start_point="equator", 
+            start_angle=0.0,
+            coord="E",
+            quat=[[0.,0.,1.,0.]],
+            name= ["boresight"],
+            info = DataFrame()
+    )
+end
+    
+    
 function imo2ecl_coordinates(ss::ScanningStrategy)
     #=
     This function is loading imo directory. The imo v2.0< have a bug that LFT orientation. 
@@ -218,6 +254,7 @@ function get_pointings(ss::ScanningStrategy, start, stop)
     spin_axis = @SVector [cosd(ss.alpha), 0, sind(ss.alpha)]
     q_scan_direction     = Quaternion(0.,0.,1.,0.)
     q_point, q_pol_angle = imo2ecl_coordinates(ss)
+    q_solar_system       = rotate_quat(ss.start_angle, ez)
     @views @inbounds for i = eachindex(ss.quat)
         q_point_idet     = q_point[i]
         q_pol_angle_idet = q_pol_angle[i]
@@ -227,7 +264,7 @@ function get_pointings(ss::ScanningStrategy, start, stop)
             q_prec         = rotate_quat(omega_prec,  t, ex)
             q_spin         = rotate_quat(omega_spin,  t, spin_axis)
             
-            Q              = q_revol * q_prec * q_spin
+            Q              = q_solar_system * q_revol * q_prec * q_spin
             q_point_t      = Q * q_point_idet / Q
             q_pol_t        = Q * q_pol_angle_idet / Q
             
