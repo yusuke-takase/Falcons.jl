@@ -57,8 +57,4 @@ export h_nm, get_hnm_quantify, get_scanfield
 # coordinates.jl
 export _ang2galvec_one_sample, rotate_coordinates_e2g!, rotate_vec_ecl_to_gal_coordinates!, _rotate_coordinates_and_pol_e2g_for_one_sample
 
-#get_pointings_tuple,
-#ecliptic2galactic,
-#ScanningStrategy2map,
-
 end

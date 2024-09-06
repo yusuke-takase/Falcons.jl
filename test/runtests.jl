@@ -7,15 +7,9 @@ year = day * 365
 t = 100
 
 function test_wo_imo()
-    ss_tp = gen_ScanningStrategy_ThetaPhi(duration=t)
-    @testset "ScanningStrategy_structure-Test" begin
-        @test typeof(ss_tp) <: ScanningStrategy_ThetaPhi
-        @show fieldnames(ScanningStrategy_ThetaPhi)
-        println("Test ScanningStrategy_ThetaPhi ==> ", ss_tp)
-    end
-
     @testset "get_pointings-Test" begin
-        pointings = get_pointings(ss_tp, 0, t)
+        ss = gen_ScanningStrategy()
+        pointings = get_pointings(ss, 0, t)
         @test typeof(pointings[1]) <: Matrix
         @test typeof(pointings[2]) <: Matrix
         @test typeof(pointings[3]) <: Matrix
@@ -28,7 +22,7 @@ function test_w_imo(imo_path)
         imo = gen_imo(imo_path)
         @test typeof(imo)<:Imo
     end
-    
+
     @testset "get_pointings (IMo ver.) -Test" begin
         imo = gen_imo(imo_path)
         pointings = get_pointings(ss_imo, 0, t)
@@ -50,7 +44,7 @@ function test_w_imo(imo_path)
             "000_003_008_QB_040_T",
             "000_004_000_UA_040_T",
             "000_007_002_QB_040_T"]
-        @test_nowarn imo_name!(ss_imo, imo, name=bolonames)    
+        @test_nowarn imo_name!(ss_imo, imo, name=bolonames)
     end
 end
 
