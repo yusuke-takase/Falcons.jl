@@ -25,7 +25,7 @@ ProgressMeter = "1.10.2"
 ReferenceFrameRotations = "1.0, 3.0.2"
 SkyCoords = "1.4.0"
 StaticArrays = "1.2"
-Statistics = "1.9.7"
+Statistics = "1.7.3"
 julia = "1.7, 1.10"
 
 
