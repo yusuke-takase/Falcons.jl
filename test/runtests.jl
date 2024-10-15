@@ -1,60 +1,56 @@
 using Falcons
 using Healpix
+using JSON
 using Test
 
-day = 60 * 60 * 24
-year = day * 365
+
 t = 100
+ss = gen_ScanningStrategy()
+ss.sampling_rate = 1.0
+ss.nside = 16
 
-function test_wo_imo()
-    @testset "get_pointings-Test" begin
-        ss = gen_ScanningStrategy()
-        pointings = get_pointings(ss, 0, t)
-        @test typeof(pointings[1]) <: Matrix
-        @test typeof(pointings[2]) <: Matrix
-        @test typeof(pointings[3]) <: Matrix
-    end
-end
-
-function test_w_imo(imo_path)
-    ss_imo = gen_ScanningStrategy(duration=t)
-    @testset "gen_imo-Test" begin
-        imo = gen_imo(imo_path)
-        @test typeof(imo)<:Imo
-    end
-
-    @testset "get_pointings (IMo ver.) -Test" begin
-        imo = gen_imo(imo_path)
-        pointings = get_pointings(ss_imo, 0, t)
-        @test typeof(pointings[1]) <: Matrix
-        @test typeof(pointings[2]) <: Matrix
-        @test typeof(pointings[3]) <: Matrix
-    end
-
-    @testset "Pick up data from IMo" begin
-        imo = gen_imo(imo_path)
-        @test_nowarn imo_telescope!(ss_imo, imo, telescope="L")
-        @test_nowarn imo_telescope!(ss_imo, imo, telescope="M")
-        @test_nowarn imo_telescope!(ss_imo, imo, telescope="H")
-        channel_info = get_channel_info(imo)
-        for i in channel_info
-            @test_nowarn imo_channel!(ss_imo, imo, channel=i)
+function test_get_pointings(;save=false)
+    pointings = get_pointings(ss, 0, t)
+    theta = pointings[1][:,1]
+    phi = pointings[2][:,1]
+    psi = pointings[3][:,1]
+    time = pointings[4][:,1]
+    if save
+        open("reference/pointings.json", "w") do io
+            JSON.print(io, Dict("theta" => theta, "phi" => phi, "psi" => psi, "time" => time))
         end
-        bolonames = ["000_000_006_UA_040_T",
-            "000_003_008_QB_040_T",
-            "000_004_000_UA_040_T",
-            "000_007_002_QB_040_T"]
-        @test_nowarn imo_name!(ss_imo, imo, name=bolonames)
+    end
+    json = JSON.parsefile("reference/pointings.json")
+    @testset "get_pointings-Test" begin
+        @test theta == json["theta"]
+        @test phi == json["phi"]
+        @test psi == json["psi"]
+        @test time == json["time"]
     end
 end
 
-imo_test = Base.prompt("Do you have the schema.json? [y/n]")
-if imo_test == "y"
-    imo_path = Base.prompt("Input the path for schema.json")
-     test_wo_imo()
-    test_w_imo(imo_path)
-else
-    test_wo_imo()
+function test_get_scanfield(;save=false)
+    spin_n = [-1, 0, 1/2, 2]
+    spin_m = [-1/2, 1/2]
+    field = get_scanfield(ss, division=1, spin_n=spin_n, spin_m=spin_m)
+    if save
+        for n in spin_n
+            for m in spin_m
+                healpix_map = HealpixMap{Float64, RingOrder}(ss.nside)
+                healpix_map.pixels .= abs.(h_nm(field,n,m))
+                saveToFITS(healpix_map, "!xlink_n=$(n)_m=$(m).fits")
+            end
+        end
+    end
+    @testset "get_scanfield-Test" begin
+        for n in spin_n
+            for m in spin_m
+                healpix_map_ref = readMapFromFITS("xlink_n=$(n)_m=$(m).fits", 1, Float64)
+                @test healpix_map_ref == abs.(h_nm(field,n,m))
+            end
+        end
+    end
 end
 
-test_wo_imo()
+test_get_pointings(save=false)
+test_get_scanfield(save=false)

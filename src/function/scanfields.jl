@@ -2,18 +2,18 @@ mutable struct scanfield{I<:Integer}
     hitmap::AbstractArray{I,1}
     h::Array
     quantify::DataFrame
-    n::AbstractArray{I,1}
-    m::AbstractArray{I,1}
-    ss
+    n::Array
+    m::Array
+    ss::ScanningStrategy
 end
 
-function h_nm(field::scanfield, n::Int,m::Int)
+function h_nm(field::scanfield, n::Real, m::Real)
     fn(i) = findall(x->x==i, field.n)[1]
     fm(i) = findall(x->x==i, field.m)[1]
     return field.h[fn(n), fm(m),:]
 end
 
-function h_nm(hₙₘ::Array, spin_n::Vector, spin_m::Vector, n::Int, m::Int)
+function h_nm(hₙₘ::Array, spin_n::Array, spin_m::Array, n::Real, m::Real)
     fn(i) = findall(x->x==i, spin_n)[1]
     fm(i) = findall(x->x==i, spin_m)[1]
     return hₙₘ[fn(n), fm(m),:]
@@ -44,8 +44,7 @@ function get_hnm_quantify(hₙₘ, spin_n, spin_m)
     return df
 end
 
-function get_scanfield(ss::ScanningStrategy,; division, spin_n, spin_m)
-    #println("RUN `get_scanfield`")
+function get_scanfield(ss::ScanningStrategy,; division::Int, spin_n::Array, spin_m::Array)
     orientation_func_hwp(n, m, ψⱼ, ϕⱼ) = ℯ^(-im*(n*ψⱼ + m*ϕⱼ))
     h      = orientation_func_hwp
     resol  = Resolution(ss.nside)

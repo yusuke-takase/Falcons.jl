@@ -1,7 +1,7 @@
 name = "Falcons"
 uuid = "eba0fb4b-2daf-4740-90d2-e5655143e0a0"
 authors = ["Yusuke Takase <takase_y@s.okayama-u.ac.jp>"]
-version = "1.0.1"
+version = "1.0.2"
 
 [deps]
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
@@ -17,16 +17,16 @@ StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 
 [compat]
-DataFrames = "1.6.1"
-Healpix = "4.0.0"
+DataFrames = "1.7.0"
+Healpix = "4.2.2"
 JSON = "0.21.4"
-NaNStatistics = "0.1, 0.6.30"
-ProgressMeter = "1.6"
-ReferenceFrameRotations = "1.0, 3"
+NaNStatistics = "0.1, 0.6.42"
+ProgressMeter = "1.10.2"
+ReferenceFrameRotations = "1.0, 3.0.2"
 SkyCoords = "1.4.0"
 StaticArrays = "1.2"
-Statistics = "1.7.0"
-julia = "1.7"
+Statistics = "1.9.7"
+julia = "1.7, 1.10"
 
 
 [extras]
