@@ -3,14 +3,13 @@ using Healpix
 using JSON
 using Test
 
-
-t = 100
 ss = gen_ScanningStrategy()
 ss.sampling_rate = 1.0
 ss.nside = 16
+ss.duration = 100
 
 function test_get_pointings(;save=false)
-    pointings = get_pointings(ss, 0, t)
+    pointings = get_pointings(ss, 0, ss.duration)
     theta = pointings[1][:,1]
     phi = pointings[2][:,1]
     psi = pointings[3][:,1]
@@ -37,7 +36,8 @@ function test_get_scanfield(;save=false)
         for n in spin_n
             for m in spin_m
                 healpix_map = HealpixMap{Float64, RingOrder}(ss.nside)
-                healpix_map.pixels .= abs.(h_nm(field,n,m))
+                field_non_nan = replace(abs2.(h_nm(field,n,m)), NaN=>0.0)
+                healpix_map.pixels .= field_non_nan
                 saveToFITS(healpix_map, "!xlink_n=$(n)_m=$(m).fits")
             end
         end
@@ -46,7 +46,8 @@ function test_get_scanfield(;save=false)
         for n in spin_n
             for m in spin_m
                 healpix_map_ref = readMapFromFITS("xlink_n=$(n)_m=$(m).fits", 1, Float64)
-                @test healpix_map_ref == abs.(h_nm(field,n,m))
+                field_non_nan = replace(abs2.(h_nm(field,n,m)), NaN=>0.0)
+                @test healpix_map_ref == field_non_nan
             end
         end
     end
