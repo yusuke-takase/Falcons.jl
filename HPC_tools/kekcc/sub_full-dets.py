@@ -38,11 +38,8 @@ sampling_rate   = 1.
 coord           = "G"
 gamma           = 0
 
-
-#spin_n = [0,1,2,3,4,5,6,7,8,9,10]
-#spin_m = [-9,-8,-7,-5,-4,-3,-2,-np.sqrt(2),-1,-0.5,0,0.5,1,np.sqrt(2),2,3,4,5,7,8,9]
-spin_n = [0,1,2,3]
-spin_m = [-4, -3/2, -np.sqrt(2), 0, np.sqrt(2), 3/2, 4]
+spin_n = [0,1,2,3,4,5,6,7,8,9,10]
+spin_m = [-9,-8,-7,-5,-4,-3,-2,-1,0,1,2,3,4,5,7,8,9]
 
 imo = lbs.Imo(flatfile_location=imo_path)
 telescopes = ["LFT", "MFT", "HFT"]
