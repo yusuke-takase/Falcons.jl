@@ -1,3 +1,4 @@
+import litebird_sim as lbs
 import numpy as np
 import subprocess
 import sys
@@ -6,10 +7,10 @@ import uuid
 import time
 
 #------ User dependent parameters ------
-base_path = "/group/cmb/litebird/usr/ytakase/KDP/test"
-julia_path = "/home/cmb/yusuket/.julia/juliaup/julia-1.10.5+0.x64.linux.gnu/bin:$PATH"
-coderoot  = '/home/cmb/yusuket/program/map-make/sim_scan_fields'
-imo_path = "/home/cmb/yusuket/litebird/litebird_imo/IMO/schema.json"
+base_path = "<enter your path>"
+julia_path = "<enter your path>"
+coderoot  = "<enter your path>"
+imo_path = "<enter your path>"
 #----------------------------------------
 
 logdir    = os.path.join(coderoot, 'log')
@@ -36,10 +37,11 @@ duration_s      = n_year * one_year
 division        = 320
 sampling_rate   = 1.
 coord           = "G"
+hwp_rpm         = "IMO" # in None, rot. rate will be chosen from IMO
 gamma           = 0
 
 spin_n = [0,1,2,3,4,5,6,7,8,9,10]
-spin_m = [-9,-8,-7,-5,-4,-3,-2,-1,0,1,2,3,4,5,7,8,9]
+spin_m = [-10,-9,-8,-7,-6,-5,-4,-3,-2,-1,0,1,2,3,4,5,6,7,8,9,10]
 
 imo = lbs.Imo(flatfile_location=imo_path)
 telescopes = ["LFT", "MFT", "HFT"]
@@ -76,6 +78,7 @@ spin_n = {spin_n}
 spin_m = {spin_m}
 duration_s = '{duration_s}'
 division = '{division}'
+hwp_rpm = '{hwp_rpm}'
 coord = '{coord}'
                 """
                 with open(tomlfile_path, 'w') as f:

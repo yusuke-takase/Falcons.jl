@@ -25,10 +25,10 @@ function sim_det_scanfields(tomlfile_path::String)
     ss.duration      = duration
     ss.gamma         = gamma
     ss.sampling_rate = sampling_rate
-    if det_name == "boresight"
-        ss.hwp_rpm       = hwp_rpm
-    else
+    if hwp_rpm == "IMO"
         ss.hwp_rpm       = inst_info["hwp_rpm"]
+    else
+        ss.hwp_rpm       = parse(Float64, hwp_rpm)
     end
     ss.coord         = coord
     if det_name != "boresight"
