@@ -11,6 +11,9 @@ using DataFrames
 using SkyCoords
 using Printf
 using Statistics
+using TOML
+using HDF5
+using Base.Filesystem
 using NaNStatistics
 
 include("./function/scanning.jl")
@@ -20,6 +23,7 @@ include("./function/pointing_systematics.jl")
 include("./function/scanfields.jl")
 include("./function/coordinates.jl")
 include("./function/units.jl")
+include("./function/pipelines.jl")
 
 # scanning.jl
 export rotate_quat, show_ss
@@ -56,5 +60,8 @@ export h_nm, get_hnm_quantify, get_scanfield
 
 # coordinates.jl
 export _ang2galvec_one_sample, rotate_coordinates_e2g!, rotate_vec_ecl_to_gal_coordinates!, _rotate_coordinates_and_pol_e2g_for_one_sample
+
+# pipelines.jl
+export sim_det_scanfields, create_h5_file
 
 end
