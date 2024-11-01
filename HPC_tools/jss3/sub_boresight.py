@@ -6,16 +6,16 @@ import uuid
 import time
 
 #------ User dependent parameters ------
-jss_account = "t541"
-user_email  = "takase_y@s.okayama-u.ac.jp"
-coderoot    = f"/home/{jss_account[0]}/{jss_account}/data/jss3_tools/example/RURI"
-conda_base  = f"/ssd/{jss_account[0]}/{jss_account}/.src/anaconda3/etc/profile.d/conda.sh"
-bizcode     = "DU10503"
+jss_account = ""
+user_email  = ""
+coderoot    = ""
+conda_base  = ""
+bizcode     = ""
 
-base_path = "/home/t/t541/ssd/outputs/xlink_maps/241025_3yr"
-julia_path = "/home/t/t541/ssd/.src/julia_versions/julia-1.10.2_x86/bin:$PATH"
-coderoot  = "/home/t/t541/data/program/map-based/sim_xlink_dataset"
-imo_path = "/home/t/t541/data/litebird/litebird_imo/IMO/schema.json"
+base_path = ""
+julia_path = ""
+coderoot  = ""
+imo_path = ""
 
 #--------- HPC setting -------------
 job_name    = "ScnFldCal"
