@@ -85,3 +85,47 @@ function get_scanfield(ss::ScanningStrategy,; division::Int, spin_n::Array, spin
     df = get_hnm_quantify(hₙₘ, spin_n, spin_m)
     return scanfield(hitmap, hₙₘ, df, spin_n, spin_m, ss)
 end
+
+
+
+function get_scanfield_step(ss::ScanningStrategy,; division::Int, spin_n::Array, spin_m::Array, step)
+    orientation_func_hwp(n, m, ψⱼ, ϕⱼ) = ℯ^(-im*(n*ψⱼ + m*ϕⱼ))
+    h      = orientation_func_hwp
+    resol  = Resolution(ss.nside)
+    npix   = nside2npix(ss.nside)
+    chunk  = Int(ss.duration / division)
+    ω_hwp  = rpm2angfreq(ss.hwp_rpm)
+    hitmap = zeros(Int64, npix)
+    hₙₘ     = zeros(Complex{Float64}, (length(spin_n), length(spin_m), npix))
+    BEGIN  = 0
+    progress = Progress(division)
+    @views @inbounds for i = 1:division
+        END = i * chunk
+        theta, phi, psi, time = get_pointings(ss, BEGIN, END, step)
+        @views @inbounds for j = eachindex(ss.quat)
+            theta_j = theta[:,j]
+            phi_j   = phi[:,j]
+            psi_j   = psi[:,j]
+            polang  = get_pol_angle(ss, j)
+            @views @inbounds for k = eachindex(time)
+                t = time[k]
+                p = pointings(resol, theta_j[k], phi_j[k], psi_j[k], mod2pi(ω_hwp*t)+polang)
+                hitmap[p.Ω] += 1
+                @views @inbounds for _n in eachindex(spin_n)
+                    @views @inbounds for _m in eachindex(spin_m)
+                        hₙₘ[_n, _m, p.Ω] += h(spin_n[_n], spin_m[_m], p.ψ, p.ϕ)
+                    end
+                end
+            end
+        end
+        BEGIN = END
+        next!(progress)
+    end
+    @views for _n in eachindex(spin_n)
+        @views for _m in eachindex(spin_m)
+            hₙₘ[_n,_m,:] ./= hitmap
+        end
+    end
+    df = get_hnm_quantify(hₙₘ, spin_n, spin_m)
+    return scanfield(hitmap, hₙₘ, df, spin_n, spin_m, ss)
+end

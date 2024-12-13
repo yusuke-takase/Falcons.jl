@@ -92,7 +92,6 @@ coord = '{coord}'
 #BSUB -e {logdir}/{jobname}.err
 
 eval "$(conda shell.bash hook)"
-conda activate lbs13
 export PATH="{julia_path}"
 cd {coderoot}
 julia -e 'using Falcons; sim_det_scanfields("{tomlfile_path}")'

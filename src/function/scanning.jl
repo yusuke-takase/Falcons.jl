@@ -278,6 +278,59 @@ function get_pointings(ss::ScanningStrategy, start, stop)
     return (theta_tod, phi_tod, psi_tod, time_array)
 end
 
+function get_pointings(ss::ScanningStrategy, start, stop, step)
+    resol = Resolution(ss.nside)
+    omega_spin = rpm2angfreq(ss.spin_rpm)
+    omega_prec = rpm2angfreq(ss.prec_rpm)
+    omega_revol = (2π) / (60.0 * 60.0 * 24.0 * 365.25)
+    time_array = start:1/ss.sampling_rate:stop-1/ss.sampling_rate |> LinRange
+    if start > stop-1/ss.sampling_rate
+        error("ERROR: \n The `start` time of the calculation is greater than or equal to the `stop` time.")
+    end
+    loop_times = length(time_array)
+    numof_det = length(ss.quat)
+
+    psi_tod = zeros(loop_times, numof_det)
+    theta_tod = zeros(loop_times, numof_det)
+    phi_tod = zeros(loop_times, numof_det)
+
+    ex = @SVector [1.0, 0.0, 0.0]
+    ey = @SVector [0.0, 1.0, 0.0]
+    ez = @SVector [0.0, 0.0, 1.0]
+    spin_axis = @SVector [cosd(ss.alpha), 0, sind(ss.alpha)]
+    q_scan_direction     = Quaternion(0.,0.,1.,0.)
+    q_point, q_pol_angle = imo2ecl_coordinates(ss)
+    q_solar_system       = rotate_quat(ss.start_angle, ez)
+    deg_per_day = 360/365.25
+    @views @inbounds for i = eachindex(ss.quat)
+        q_point_idet     = q_point[i]
+        q_pol_angle_idet = q_pol_angle[i]
+        @views @inbounds for j = eachindex(time_array)
+            t              = time_array[j]
+            revol_angle    = deg2rad(deg_per_day * floor(t/step))
+            q_revol        = rotate_quat(revol_angle, ez)
+            q_prec         = rotate_quat(omega_prec,  t, ex)
+            q_spin         = rotate_quat(omega_spin,  t, spin_axis)
+
+            Q              = q_solar_system * q_revol * q_prec * q_spin
+            q_point_t      = Q * q_point_idet / Q
+            q_pol_t        = Q * q_pol_angle_idet / Q
+
+            vec_point      = vect(q_point_t)
+            poldir         = vect(q_pol_t)
+
+            θ, ϕ           = vec2ang(vec_point[1], vec_point[2], vec_point[3])
+            theta_tod[j,i] = θ
+            phi_tod[j,i]   = ϕ
+            psi_tod[j,i]   = polarization_angle(θ, ϕ, poldir)
+        end
+    end
+    if ss.coord == "G"
+        rotate_coordinates_e2g!(theta_tod, phi_tod, psi_tod)
+    end
+    return (theta_tod, phi_tod, psi_tod, time_array)
+end
+
 """
     get_pointing_pixels(ss::ScanningStrategy, start, stop)
 
