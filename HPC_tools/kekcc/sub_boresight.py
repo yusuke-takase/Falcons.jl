@@ -5,11 +5,20 @@ import os
 import uuid
 import time
 
+def period2rpm(period, unit="min"):
+    if unit == "min":
+        rpm = 1.0 / period
+    if unit == "sec":
+        rpm = 1.0 / (period/60.0)
+    if unit == "hour":
+        rpm = 1.0 / (period*60.0)
+    return rpm
+
 #------ User dependent parameters ------
-base_path = "<enter your path>"
-julia_path = "<enter your path>"
-coderoot  = "<enter your path>"
-imo_path = "<enter your path>"
+base_path = "/home/cmb/yusuket/program/scan_strategy/lecture_falcons" #"<enter your path>"
+julia_path = "/home/cmb/yusuket/.julia/juliaup/julia-1.10.5+0.x64.linux.gnu/bin:$PATH" #"<enter your path>"
+coderoot  = "/home/cmb/yusuket/program/scan_strategy/lecture_falcons" #"<enter your path>"
+imo_path = "/home/cmb/yusuket/litebird/litebird_imo/IMO/schema.json" #"<enter your path>"
 #----------------------------------------
 
 logdir    = os.path.join(coderoot, 'log')
@@ -24,7 +33,7 @@ toml_filename   = str(uuid.uuid4())
 
 
 # LSF job settings
-jobq  = "l"
+jobq  = "s"
 
 # general
 imo_version = 'v2'
@@ -35,10 +44,14 @@ det         = "boresight"
 # simulation
 name            = 'Scan field calculation'
 nside           = 128
+alpha           = 45
+beta            = 50
+spin_rpm       = 0.05
+prec_rpm       = period2rpm(192.348, unit="min")
 n_year          = 1
-one_year        = 3600*24*365
+one_year        = 3600#*24*365
 duration_s      = n_year * one_year
-division        = 320
+division        = 1#320
 sampling_rate   = 1.
 hwp_rpm         = 61.0
 coord           = "G"
@@ -57,13 +70,17 @@ imo_version = '{imo_version}'
 telescope = '{telescope}'
 channel = '{channel}'
 det_name = '{det}'
-sampling_rate = {sampling_rate}
-nside = {nside}
+sampling_rate = '{sampling_rate}'
+nside = '{nside}'
 
 [simulation]
 name = '{name}'
 base_path = '{base_path}'
-gamma = {gamma}
+alpha = '{alpha}'
+beta = '{beta}'
+spin_rpm = '{spin_rpm}'
+prec_rpm = '{prec_rpm}'
+gamma = '{gamma}'
 spin_n = {spin_n}
 spin_m = {spin_m}
 duration_s = '{duration_s}'

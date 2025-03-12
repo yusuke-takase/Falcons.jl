@@ -12,19 +12,23 @@ function sim_det_scanfields(tomlfile_path::String)
     bolonames        = [det_name]
 
     ss               = gen_ScanningStrategy()
-    duration         = parse(Float64, tomlfile["simulation"]["duration_s"])
     division         = parse(Int64, tomlfile["simulation"]["division"])
-    gamma            = Float64(tomlfile["simulation"]["gamma"])
     spin_n           = tomlfile["simulation"]["spin_n"]
     spin_m           = tomlfile["simulation"]["spin_m"]
     coord            = tomlfile["simulation"]["coord"]
     hwp_rpm          = tomlfile["simulation"]["hwp_rpm"]
-    ss.nside         = tomlfile["general"]["nside"]
-    sampling_rate    = tomlfile["general"]["sampling_rate"]
 
-    ss.duration      = duration
-    ss.gamma         = gamma
-    ss.sampling_rate = sampling_rate
+    ss.nside         = parse(Int64, tomlfile["general"]["nside"])
+    ss.sampling_rate = parse(Float64, tomlfile["general"]["sampling_rate"])
+    ss.alpha         = parse(Float64, tomlfile["simulation"]["alpha"])
+    ss.beta          = parse(Float64, tomlfile["simulation"]["beta"])
+    ss.spin_rpm      = parse(Float64, tomlfile["simulation"]["spin_rpm"])
+
+    ss.prec_rpm      = parse(Float64, tomlfile["simulation"]["prec_rpm"])
+    ss.duration      = parse(Float64, tomlfile["simulation"]["duration_s"])
+    ss.gamma         = parse(Float64, tomlfile["simulation"]["gamma"])
+
+    println("hwp_rpm: ", hwp_rpm)
     if hwp_rpm == "IMO"
         ss.hwp_rpm       = inst_info["hwp_rpm"]
     else
@@ -35,6 +39,7 @@ function sim_det_scanfields(tomlfile_path::String)
         imo_name!(ss, imo, name=bolonames)
     end
     show_ss(ss)
+    @info ss
 
     field = get_scanfield(ss, division=division, spin_n=spin_n, spin_m=spin_m)
     if !isdir(base_path)
@@ -49,6 +54,7 @@ function sim_det_scanfields(tomlfile_path::String)
     println("\nSimulation was done successfully.")
     println("The fits file saved: ",  base_path * output_filename)
 end
+
 
 function create_h5_file(base_path::AbstractString, filename::AbstractString, field::scanfield,; savemap=true)
     h5open(base_path * filename, "w") do file
