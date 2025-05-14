@@ -46,8 +46,8 @@ name            = 'Scan field calculation'
 nside           = 128
 alpha           = 45
 beta            = 50
-spin_rpm       = 0.05
-prec_rpm       = period2rpm(192.348, unit="min")
+spin_rpm        = 0.05
+prec_rpm        = period2rpm(192.348, unit="min")
 n_year          = 1
 one_year        = 3600#*24*365
 duration_s      = n_year * one_year

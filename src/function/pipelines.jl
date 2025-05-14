@@ -6,6 +6,12 @@ function sim_det_scanfields(tomlfile_path::String)
     telescope        = tomlfile["general"]["telescope"]
     channel_name     = tomlfile["general"]["channel"]
     det_name         = tomlfile["general"]["det_name"]
+    if haskey(tomlfile["general"], "reformation")
+        reformation = parse(Bool, tomlfile["general"]["reformation"])
+    else
+        println("Key 'reformation' does not exist in tomlfile['general'].")
+        reformation = nothing  # デフォルト値を設定するなどの処理
+    end
     inst_info        = get_instrument_info(imo, telescope)
     channel_list     = get_channel_list(imo)
     channel_info     = get_channel_info(imo, channel_name)
@@ -36,7 +42,12 @@ function sim_det_scanfields(tomlfile_path::String)
     end
     ss.coord         = coord
     if det_name != "boresight"
-        imo_name!(ss, imo, name=bolonames)
+
+        if reformation != nothing
+            imo_name!(ss, imo, reformation, name=bolonames)
+        else
+            imo_name!(ss, imo, name=bolonames)
+        end
     end
     show_ss(ss)
     @info ss

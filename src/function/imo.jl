@@ -20,17 +20,17 @@ end
 
 function get_channel_info(imo::Imo)
     df = DataFrame()  # 空のDataFrameを初期化
-    
+
     for i in eachindex(imo.imo["data_files"])
         if imo.imo["data_files"][i]["name"] == "channel_info"
             metadata = imo.imo["data_files"][i]["metadata"]
             metadata_keys = keys(metadata)
-            
+
             keys_to_exclude = Set(["detector_objs", "detector_names"])
             filtered_metadata = Dict(
                 key => value for (key, value) in metadata if !(key in keys_to_exclude)
             )
-            
+
             if isempty(df)
                 df = DataFrame(permutedims(collect(values(filtered_metadata))), collect(keys(filtered_metadata)))
             else
@@ -53,6 +53,37 @@ function imo_channel!(ss::ScanningStrategy, imo::Imo,; channel)
     df = ""
     for i in eachindex(imo.imo["data_files"])
         if haskey(imo.imo["data_files"][i]["metadata"], "pixtype") == true
+            boloname = imo.imo["data_files"][i]["metadata"]["name"]
+            teles = split.(imo.imo["data_files"][i]["metadata"]["channel"], "")[1]
+            ch = imo.imo["data_files"][i]["metadata"]["channel"]
+            if ch == channel
+                metadata = imo.imo["data_files"][i]["metadata"]
+                if switch == 0
+                    df = DataFrame(permutedims(collect(values(metadata))), collect(keys(metadata)))
+                    switch = 1
+                else
+                    push!(df, collect(values(metadata)))
+                end
+            end
+        end
+    end
+    if df == ""
+         @error "No such channel in the IMo."
+    else
+        ss.quat = Vector{Vector{Float64}}(df.quat)
+        ss.name = df.name
+        ss.info = df
+        #println("The channel `$(channel)` is set from IMo.")
+    end
+    return ss
+end
+
+
+function imo_channel!(ss::ScanningStrategy, imo::Imo, reformation::Bool, ; channel,)
+    switch = 0
+    df = ""
+    for i in eachindex(imo.imo["data_files"])
+        if haskey(imo.imo["data_files"][i]["metadata"], "pixel") == true
             boloname = imo.imo["data_files"][i]["metadata"]["name"]
             teles = split.(imo.imo["data_files"][i]["metadata"]["channel"], "")[1]
             ch = imo.imo["data_files"][i]["metadata"]["channel"]
@@ -144,6 +175,46 @@ function imo_name!(ss::ScanningStrategy, imo::Imo,;name::Vector)
     return ss
 end
 
+
+function imo_name!(ss::ScanningStrategy, imo::Imo, reformation::Bool, ;name::Vector)
+    switch = 0
+    df = 0
+    for i in eachindex(imo.imo["data_files"])
+        if haskey(imo.imo["data_files"][i]["metadata"], "pixel") == true
+            boloname = imo.imo["data_files"][i]["metadata"]["name"]
+            #println(boloname)
+            #teles = split.(imo.imo["data_files"][i]["metadata"]["channel"], "")[1]
+            ch = imo.imo["data_files"][i]["metadata"]["channel"]
+            for j in eachindex(name)
+                if boloname == name[j]
+
+                    metadata = imo.imo["data_files"][i]["metadata"]
+                    if switch == 0
+                        df = DataFrame(permutedims(collect(values(metadata))), collect(keys(metadata)))
+                        switch = 1
+                    else
+                        push!(df, collect(values(metadata)))
+                    end
+                end
+            end
+        end
+    end
+
+    if df == ""
+         @error "No such detector in the IMo."
+    else
+        ss.quat = Vector{Vector{Float64}}(df.quat)
+        ss.name = df.name
+        ss.info = df
+        #println("The detector")
+        #for i in eachindex(ss.name)
+        #    println("     `$(ss.name[i])`")
+        #end
+        #println("is set from IMo.")
+    end
+    return ss
+end
+
 function get_detectors(path)
     bolonames = []
     open(path) do file
@@ -174,27 +245,31 @@ end
 
 function get_pol_angle(ss::ScanningStrategy, i::Int)
     if size(ss.info) == (0,0)
-        # boresight 
+        # boresight
         return 0.
     end
-    try
-        polang = deg2rad(parse(Float64, ss.info.orient[i]))
-        return polang
-    catch
-        if ss.info.orient[i] == "Q"
-            if ss.info.pol[i] == "T"
-                polang = 0
-            elseif ss.info.pol[i] == "B"
-                polang = π/2
+    if hasproperty(ss.info, :orient)
+        try
+            polang = deg2rad(parse(Float64, ss.info.orient[i]))
+            return polang
+        catch
+            if ss.info.orient[i] == "Q"
+                if ss.info.pol[i] == "T"
+                    polang = 0
+                elseif ss.info.pol[i] == "B"
+                    polang = π/2
+                end
             end
-        end
-        if ss.info.orient[i] == "U"
-            if ss.info.pol[i] == "T"
-                polang = π/4
-            elseif ss.info.pol[i] == "B"
-                polang = 3π/4
+            if ss.info.orient[i] == "U"
+                if ss.info.pol[i] == "T"
+                    polang = π/4
+                elseif ss.info.pol[i] == "B"
+                    polang = 3π/4
+                end
             end
+            return polang
         end
-        return polang
+    else
+        return ss.info.pol_angle_rad[i]
     end
 end
