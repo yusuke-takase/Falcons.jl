@@ -267,7 +267,7 @@ function imo2ecl_coordinates(ss::ScanningStrategy)
 		elseif split.(ss.name[i], "_")[1] == "999"# after reformation imo
 			#@show "after reformation"
 			q_imo = Quaternion(ss.quat[i][4], ss.quat[i][1], ss.quat[i][2], ss.quat[i][3])
-			q_gamma = rotate_quat(deg2rad(270.0), ez)
+			q_gamma = rotate_quat(deg2rad(90 + ss.gamma), ez)
 			Q = rotate_quat(deg2rad(ss.beta), ey) * q_gamma * q_imo
 			Q = rotate_quat(deg2rad(90.0 - ss.alpha), ey) * Q
 			q_dets[i] = Q * q_boresight / Q
