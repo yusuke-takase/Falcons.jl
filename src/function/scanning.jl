@@ -475,3 +475,88 @@ function normarize!(resol::Resolution, maps::Array, hitmap::Array)
 	end
 	return maps
 end
+
+
+# Updates for calculating the trajectory of any detector
+
+function ang_to_quat(theta, phi)
+    ey = [0.0, 1.0, 0.0]
+    ez = [0.0, 0.0, 1.0]
+    temp = rotate_quat(phi, ez) * rotate_quat(theta, ey)
+    return [temp[2], temp[3], temp[4], temp[1]] # Adjust to the formation required by the Falcons
+end
+
+function get_q_dets_q_pol_dets(ss::ScanningStrategy)
+    ex          = [1.0, 0.0, 0.0]
+	ey          = [0.0, 1.0, 0.0]
+	ez          = [0.0, 0.0, 1.0]
+	q_boresight = Quaternion(0.0, 0.0, 0.0, 1.0)
+	q_pol       = Quaternion(0.0, 1.0, 0.0, 0.0)
+	q_dets      = [Quaternion{Float64}(I) for i in eachindex(ss.quat)]
+	q_pol_dets  = [Quaternion{Float64}(I) for i in eachindex(ss.quat)]
+	q_gamma     = 0.0
+	polang      = 0.0
+    for i in eachindex(ss.quat)
+        q_initial     = Quaternion(ss.quat[i][4], ss.quat[i][1], ss.quat[i][2], ss.quat[i][3])
+        if ss.start_point == "pole"
+			flip = π
+		elseif ss.start_point == "equator"
+			flip = 0.0
+		end
+        Q = rotate_quat(deg2rad(90.0 - ss.alpha), ey) * rotate_quat(flip, ez) * rotate_quat(deg2rad(ss.beta), ey) * q_initial
+        q_dets[i]     = Q * q_boresight / Q
+		q_pol_dets[i] = Q * q_pol / Q
+    end
+    return (q_dets, q_pol_dets)
+end
+
+function get_pointings_anydetector(ss::ScanningStrategy, start, stop)
+	resol = Resolution(ss.nside)
+	omega_spin = rpm2angfreq(ss.spin_rpm)
+	omega_prec = rpm2angfreq(ss.prec_rpm)
+	omega_revol = (2π) / (60.0 * 60.0 * 24.0 * 365.25)
+	time_array = start:1/ss.sampling_rate:stop-1/ss.sampling_rate |> LinRange
+	if start > stop - 1 / ss.sampling_rate
+		error("ERROR: \n The `start` time of the calculation is greater than or equal to the `stop` time.")
+	end
+	loop_times = length(time_array)
+	numof_det = length(ss.quat)
+
+	psi_tod = zeros(loop_times, numof_det)
+	theta_tod = zeros(loop_times, numof_det)
+	phi_tod = zeros(loop_times, numof_det)
+
+	ex                   = @SVector [1.0, 0.0, 0.0]
+	ey                   = @SVector [0.0, 1.0, 0.0]
+	ez                   = @SVector [0.0, 0.0, 1.0]
+	spin_axis            = @SVector [cosd(ss.alpha), 0, sind(ss.alpha)]
+	q_scan_direction     = Quaternion(0.0, 0.0, 1.0, 0.0)
+	q_point, q_pol_angle = get_q_dets_q_pol_dets(ss)
+	q_solar_system       = rotate_quat(ss.start_angle, ez)
+	@views @inbounds for i ∈ eachindex(ss.quat)
+		q_point_idet     = q_point[i]
+		q_pol_angle_idet = q_pol_angle[i]
+		@views @inbounds @threads for j ∈ eachindex(time_array)
+			t       = time_array[j]
+			q_revol = rotate_quat(omega_revol, t, ez)
+			q_prec  = rotate_quat(omega_prec, t, ex)
+			q_spin  = rotate_quat(omega_spin, t, spin_axis)
+
+			Q         = q_solar_system * q_revol * q_prec * q_spin
+			q_point_t = Q * q_point_idet / Q
+			q_pol_t   = Q * q_pol_angle_idet / Q
+
+			vec_point = vect(q_point_t)
+			poldir    = vect(q_pol_t)
+
+			θ, ϕ            = vec2ang(vec_point[1], vec_point[2], vec_point[3])
+			theta_tod[j, i] = θ
+			phi_tod[j, i]   = ϕ
+			psi_tod[j, i]   = polarization_angle(θ, ϕ, poldir)
+		end
+	end
+	if ss.coord == "G"
+		rotate_coordinates_e2g!(theta_tod, phi_tod, psi_tod)
+	end
+	return (theta_tod, phi_tod, psi_tod, time_array)
+end
