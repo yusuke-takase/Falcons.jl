@@ -510,7 +510,7 @@ function get_q_dets_q_pol_dets(ss::ScanningStrategy)
     return (q_dets, q_pol_dets)
 end
 
-function get_pointings_anydetector(ss::ScanningStrategy, start, stop)
+function get_pointings_optional(ss::ScanningStrategy, start, stop)
 	resol = Resolution(ss.nside)
 	omega_spin = rpm2angfreq(ss.spin_rpm)
 	omega_prec = rpm2angfreq(ss.prec_rpm)
