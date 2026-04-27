@@ -31,6 +31,7 @@ export ScanningStrategy, pointings
 export gen_ScanningStrategy, get_satellite
 export get_pointings, get_pointing_pixels
 export angtod2hitmap, pixtod2hitmap, normarize!
+export ang_to_quat, get_pointings_arbitrary_dets
 
 # imo.jl
 export Imo, gen_imo
