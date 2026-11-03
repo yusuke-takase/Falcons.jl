@@ -1,6 +1,5 @@
 module Falcons
 
-using ReferenceFrameRotations
 using Healpix
 using LinearAlgebra
 using Base.Threads
@@ -16,12 +15,16 @@ using HDF5
 using Base.Filesystem
 using NaNStatistics
 
+include("./function/quaternions.jl")
 include("./function/scanning.jl")
 include("./function/imo.jl")
 include("./function/scanfields.jl")
 include("./function/coordinates.jl")
 include("./function/units.jl")
 include("./function/pipelines.jl")
+
+# quaternions.jl
+export Quaternion, rotation_quat
 
 # scanning.jl
 export rotate_quat, show_ss

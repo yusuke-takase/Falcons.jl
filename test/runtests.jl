@@ -8,6 +8,7 @@ const REFDIR = joinpath(@__DIR__, "reference")
 angdiff(a, b) = abs(rem2pi(a - b, RoundNearest))
 
 @testset "Falcons.jl" begin
+	@testset "quaternion" include("test_quaternion.jl")
 	@testset "angles" include("test_angles.jl")
 	@testset "invariants" include("test_invariants.jl")
 	@testset "regression" include("test_regression.jl")

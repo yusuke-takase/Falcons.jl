@@ -1,19 +1,24 @@
-@inline function rotate_quat(omega, t, rotate_axis)
-	#= Generate a quaternion that rotates by the angle omega*t around the rotate_axis axis. =#
-	rot_ang = mod2pi(omega * t)
-	Quaternion([cos(rot_ang / 2.0), rotate_axis[1] * sin(rot_ang / 2.0), rotate_axis[2] * sin(rot_ang / 2.0), rotate_axis[3] * sin(rot_ang / 2.0)])
-end
+const EX = SVector(1.0, 0.0, 0.0)
+const EY = SVector(0.0, 1.0, 0.0)
+const EZ = SVector(0.0, 0.0, 1.0)
 
-@inline function rotate_quat(ϕ, rotate_axis)
-	Quaternion([cos(ϕ / 2.0), rotate_axis[1] * sin(ϕ / 2.0), rotate_axis[2] * sin(ϕ / 2.0), rotate_axis[3] * sin(ϕ / 2.0)])
-end
+"Angular velocity of the anti-Sun direction (rad/s), one revolution per 365.25 days."
+const OMEGA_REVOL = 2π / (60.0 * 60.0 * 24.0 * 365.25)
 
-@inline function rotate_vec(vec, rot_ang, rotate_axis)
-	q = Quaternion([cos(rot_ang / 2.0), rotate_axis[1] * sin(rot_ang / 2.0), rotate_axis[2] * sin(rot_ang / 2.0), rotate_axis[3] * sin(rot_ang / 2.0)])
-	vec_q = Quaternion(0.0, vec)
-	rot_vec = q * vec_q / q
-	return vect(rot_vec)
-end
+"""
+    rotate_quat(omega, t, axis) -> Quaternion
+
+Quaternion of the rotation by `mod2pi(omega * t)` around `axis`.
+"""
+@inline rotate_quat(omega, t, rotate_axis) = rotation_quat(rotate_axis, mod2pi(omega * t))
+
+"""
+    rotate_quat(ϕ, axis) -> Quaternion
+
+Quaternion of the rotation by `ϕ` (rad) around `axis`.
+"""
+@inline rotate_quat(ϕ, rotate_axis) = rotation_quat(rotate_axis, ϕ)
+
 mutable struct ScanningStrategy{T <: AbstractFloat, I <: Int, AS <: AbstractString}
 	nside::I
 	duration::I
@@ -41,17 +46,16 @@ function show_ss(ss::ScanningStrategy)
 	@printf("%-24s : %0.1f \n", "gamma [deg]", ss.gamma)
 
 	@printf("%-24s : %0.3f\n", "prec. period [min]", period2rpm(ss.prec_rpm))
-	@printf("%1s %-22s : %f\n", '\u21B3', "prec. rate [rpm]", ss.prec_rpm)
+	@printf("%1s %-22s : %f\n", '↳', "prec. rate [rpm]", ss.prec_rpm)
 
 	@printf("%-24s : %0.3f\n", "spin period [min]", period2rpm(ss.spin_rpm))
-	@printf("%1s %-22s : %f\n", '\u21B3', "spin rate [rpm]", ss.spin_rpm)
+	@printf("%1s %-22s : %f\n", '↳', "spin rate [rpm]", ss.spin_rpm)
 	@printf("%-24s : %f \n", "HWP rot. rate[rpm]", ss.hwp_rpm)
-	#@printf("%-24s : %s \n", "start point", ss.start_point)
 	@printf("%-24s : %f \n", "start angle", ss.start_angle)
 	@printf("%-24s : %s \n", "coordinate system", ss.coord)
 	@printf("%-24s\n", "FPU")
 	for i in eachindex(ss.quat)
-		@printf("\u21B3 Det. %i  name | %s %-12s : (x,y,z,w) = [%0.3f, %0.3f, %0.3f, %0.3f] \n", i, ss.name[i], "",
+		@printf("↳ Det. %i  name | %s %-12s : (x,y,z,w) = [%0.3f, %0.3f, %0.3f, %0.3f] \n", i, ss.name[i], "",
 			ss.quat[i][1],
 			ss.quat[i][2],
 			ss.quat[i][3],
@@ -60,23 +64,31 @@ function show_ss(ss::ScanningStrategy)
 	end
 end
 
-mutable struct Pointings
-	x::AbstractFloat
-	y::AbstractFloat
-	z::AbstractFloat
-	θ::AbstractFloat # position of sky
-	φ::AbstractFloat # position of sky
-	Ω::Int           # Sky pixel index
-	ψ::AbstractFloat # Crossing angle
-	ϕ::AbstractFloat # HWP angle
-	ξ::AbstractFloat # mod2pi(2ϕ) + ψ
+"""
+    Pointings{T}
+
+Pointing information of one sample: unit vector `(x, y, z)`, sky position
+`(θ, φ)`, RING pixel index `Ω`, orientation angle `ψ`, HWP angle `ϕ` and
+`ξ = mod2pi(2ϕ) + ψ`.
+"""
+struct Pointings{T <: AbstractFloat}
+	x::T
+	y::T
+	z::T
+	θ::T
+	φ::T
+	Ω::Int
+	ψ::T
+	ϕ::T
+	ξ::T
 end
 
 function pointings(resol::Resolution, θ, φ, ψ, ϕ)
-	vec = ang2vec(θ, φ)
+	x, y, z = ang2vec(θ, φ)
 	Ω = ang2pixRing(resol, θ, φ)
 	ξ = mod2pi(2ϕ) + ψ
-	return Pointings(vec[1], vec[2], vec[3], θ, φ, Ω, ψ, ϕ, ξ)
+	T = float(promote_type(typeof(θ), typeof(φ), typeof(ψ), typeof(ϕ)))
+	return Pointings{T}(x, y, z, θ, φ, Ω, ψ, ϕ, ξ)
 end
 
 function gen_ScanningStrategy(;
@@ -148,64 +160,40 @@ function get_satellite(satellite)
 	)
 end
 
+_flip_angle(ss::ScanningStrategy) = ss.start_point == "pole" ? π : 0.0
+
+"""
+    imo2ecl_coordinates(ss) -> (pointing_dirs, pol_dirs)
+
+Pointing and polarization directions of every detector in the spin-axis frame
+at `t = 0`, as vectors of `SVector{3}`. Detectors that match none of the
+supported naming schemes (boresight, IMO entries with a `pixtype` column, or
+"999"-prefixed names) are left as zero vectors.
+"""
 function imo2ecl_coordinates(ss::ScanningStrategy)
-	#=
-	This function is loading imo directory. The imo v2.0< have a bug that LFT orientation.
-	In order to modify the bug, the comment of `g_gamma` have to be erase.
-	=#
-	ex          = [1.0, 0.0, 0.0]
-	ey          = [0.0, 1.0, 0.0]
-	ez          = [0.0, 0.0, 1.0]
-	q_boresight = Quaternion(0.0, 0.0, 0.0, 1.0)
-	q_pol       = Quaternion(0.0, 1.0, 0.0, 0.0)
-	q_dets      = [Quaternion{Float64}(I) for i in eachindex(ss.quat)]
-	q_pol_dets  = [Quaternion{Float64}(I) for i in eachindex(ss.quat)]
-	q_gamma     = 0.0
-	polang      = 0.0
+	q_dets     = [zero(SVector{3, Float64}) for i in eachindex(ss.quat)]
+	q_pol_dets = [zero(SVector{3, Float64}) for i in eachindex(ss.quat)]
 	for i in eachindex(ss.quat)
 		if ss.name[i] == "boresight"
-			#@show "boresight"
-			if ss.start_point == "pole"
-				flip = π
-			elseif ss.start_point == "equator"
-				flip = 0.0
+			Q = rotate_quat(deg2rad(90.0 - ss.alpha), EY) * rotate_quat(_flip_angle(ss), EZ) * rotate_quat(deg2rad(ss.beta), EY)
+		elseif hasproperty(ss.info, :pixtype) # IMO before the reformation
+			telescope = split(ss.name[i], "_")[1]
+			q_imo     = Quaternion(ss.quat[i])
+			q_gamma   = rotate_quat(deg2rad(ss.gamma), EZ)
+			Q = rotate_quat(deg2rad(ss.beta), EY) * q_gamma * q_imo
+			if telescope == "001" || telescope == "002" # MFT, HFT
+				Q = rotate_quat(π, EZ) * Q
 			end
-			Q             = rotate_quat(deg2rad(90.0 - ss.alpha), ey) * rotate_quat(flip, ez) * rotate_quat(deg2rad(ss.beta), ey)
-			q_dets[i]     = Q * q_boresight / Q
-			q_pol_dets[i] = Q * q_pol / Q
-		elseif hasproperty(ss.info, :pixtype) # before reformation imo
-			#@show "before reformation"
-			telescope = split.(ss.name[i], "_")[1]
-			q_imo     = Quaternion(ss.quat[i][4], ss.quat[i][1], ss.quat[i][2], ss.quat[i][3])
-			if telescope == "000" #LFT
-				#q_gamma = rotate_quat(deg2rad(270), ez)
-				q_gamma = rotate_quat(deg2rad(ss.gamma), ez)
-			elseif telescope == "001" #MFT
-				#q_gamma = rotate_quat(deg2rad(240), ez)
-				q_gamma = rotate_quat(deg2rad(ss.gamma), ez)
-			elseif telescope == "002" #HFT
-				#q_gamma = rotate_quat(deg2rad(30), ez)
-				q_gamma = rotate_quat(deg2rad(ss.gamma), ez)
-			end
-			Q = rotate_quat(deg2rad(ss.beta), ey) * q_gamma * q_imo
-			if telescope == "001" #MFT
-				Q = rotate_quat(π, ez) * Q
-			elseif telescope == "002" #HFT
-				Q = rotate_quat(π, ez) * Q
-			end
-			Q             = rotate_quat(deg2rad(90.0 - ss.alpha), ey) * Q
-			q_dets[i]     = Q * q_boresight / Q
-			q_pol_dets[i] = Q * q_pol / Q
-			#q_scan_dets[i] = Q * q_scan / Q
-		elseif split.(ss.name[i], "_")[1] == "999"# after reformation imo
-			#@show "after reformation"
-			q_imo = Quaternion(ss.quat[i][4], ss.quat[i][1], ss.quat[i][2], ss.quat[i][3])
-			q_gamma = rotate_quat(deg2rad(90 + ss.gamma), ez)
-			Q = rotate_quat(deg2rad(ss.beta), ey) * q_gamma * q_imo
-			Q = rotate_quat(deg2rad(90.0 - ss.alpha), ey) * Q
-			q_dets[i] = Q * q_boresight / Q
-			q_pol_dets[i] = Q * q_pol / Q
+			Q = rotate_quat(deg2rad(90.0 - ss.alpha), EY) * Q
+		elseif split(ss.name[i], "_")[1] == "999" # IMO after the reformation
+			q_imo   = Quaternion(ss.quat[i])
+			q_gamma = rotate_quat(deg2rad(90 + ss.gamma), EZ)
+			Q = rotate_quat(deg2rad(90.0 - ss.alpha), EY) * (rotate_quat(deg2rad(ss.beta), EY) * q_gamma * q_imo)
+		else
+			continue
 		end
+		q_dets[i]     = rotate(Q, EZ)
+		q_pol_dets[i] = rotate(Q, EX)
 	end
 	return (q_dets, q_pol_dets)
 end
@@ -228,49 +216,39 @@ function polarization_angle(θ, ϕ, poldir)
 	return atan(sin_psi, cos_psi)
 end
 
-function get_pointings(ss::ScanningStrategy, start, stop)
-	resol = Resolution(ss.nside)
-	omega_spin = rpm2angfreq(ss.spin_rpm)
-	omega_prec = rpm2angfreq(ss.prec_rpm)
-	omega_revol = (2π) / (60.0 * 60.0 * 24.0 * 365.25)
-	time_array = start:1/ss.sampling_rate:stop-1/ss.sampling_rate |> LinRange
+function _time_array(ss::ScanningStrategy, start, stop)
 	if start > stop - 1 / ss.sampling_rate
 		error("ERROR: \n The `start` time of the calculation is greater than or equal to the `stop` time.")
 	end
-	loop_times = length(time_array)
-	numof_det = length(ss.quat)
+	return start:1/ss.sampling_rate:stop-1/ss.sampling_rate |> LinRange
+end
 
-	psi_tod = zeros(loop_times, numof_det)
-	theta_tod = zeros(loop_times, numof_det)
-	phi_tod = zeros(loop_times, numof_det)
+"""
+    _pointings(ss, time_array, det_dirs, pol_dirs, revol_angle)
 
-	ex                   = @SVector [1.0, 0.0, 0.0]
-	ey                   = @SVector [0.0, 1.0, 0.0]
-	ez                   = @SVector [0.0, 0.0, 1.0]
-	spin_axis            = @SVector [cosd(ss.alpha), 0, sind(ss.alpha)]
-	q_scan_direction     = Quaternion(0.0, 0.0, 1.0, 0.0)
-	q_point, q_pol_angle = imo2ecl_coordinates(ss)
-	q_solar_system       = rotate_quat(ss.start_angle, ez)
-	@views @inbounds for i ∈ eachindex(ss.quat)
-		q_point_idet     = q_point[i]
-		q_pol_angle_idet = q_pol_angle[i]
-		@views @inbounds @threads for j ∈ eachindex(time_array)
-			t       = time_array[j]
-			q_revol = rotate_quat(omega_revol, t, ez)
-			q_prec  = rotate_quat(omega_prec, t, ex)
-			q_spin  = rotate_quat(omega_spin, t, spin_axis)
+Compute (θ, φ, ψ) for every sample and detector. `revol_angle(t)` gives the
+rotation of the anti-Sun direction at time `t` on top of `ss.start_angle`.
+"""
+function _pointings(ss::ScanningStrategy, time_array, det_dirs, pol_dirs, revol_angle::F) where {F}
+	omega_spin = rpm2angfreq(ss.spin_rpm)
+	omega_prec = rpm2angfreq(ss.prec_rpm)
+	spin_axis  = SVector(cosd(ss.alpha), 0.0, sind(ss.alpha))
+	q_sun      = rotate_quat(ss.start_angle, EZ)
 
-			Q         = q_solar_system * q_revol * q_prec * q_spin
-			q_point_t = Q * q_point_idet / Q
-			q_pol_t   = Q * q_pol_angle_idet / Q
-
-			vec_point = vect(q_point_t)
-			poldir    = vect(q_pol_t)
-
-			θ, ϕ            = vec2ang(vec_point[1], vec_point[2], vec_point[3])
+	nsamples  = length(time_array)
+	theta_tod = zeros(nsamples, length(det_dirs))
+	phi_tod   = zeros(nsamples, length(det_dirs))
+	psi_tod   = zeros(nsamples, length(det_dirs))
+	@inbounds for i in eachindex(det_dirs)
+		d, p = det_dirs[i], pol_dirs[i]
+		@threads for j in 1:nsamples
+			t = time_array[j]
+			Q = q_sun * rotate_quat(revol_angle(t), EZ) * rotate_quat(omega_prec, t, EX) * rotate_quat(omega_spin, t, spin_axis)
+			vec_point = rotate(Q, d)
+			θ, ϕ = vec2ang(vec_point[1], vec_point[2], vec_point[3])
 			theta_tod[j, i] = θ
-			phi_tod[j, i]   = ϕ
-			psi_tod[j, i]   = polarization_angle(θ, ϕ, poldir)
+			phi_tod[j, i] = ϕ
+			psi_tod[j, i] = polarization_angle(θ, ϕ, rotate(Q, p))
 		end
 	end
 	if ss.coord == "G"
@@ -279,57 +257,29 @@ function get_pointings(ss::ScanningStrategy, start, stop)
 	return (theta_tod, phi_tod, psi_tod, time_array)
 end
 
+"""
+    get_pointings(ss, start, stop) -> (θ, φ, ψ, time)
+
+Pointing angles of every detector for `start ≤ t < stop` (s), sampled at
+`ss.sampling_rate`. `θ`, `φ` and `ψ` have shape `(nsamples, ndetectors)`.
+"""
+function get_pointings(ss::ScanningStrategy, start, stop)
+	time_array = _time_array(ss, start, stop)
+	det_dirs, pol_dirs = imo2ecl_coordinates(ss)
+	return _pointings(ss, time_array, det_dirs, pol_dirs, t -> mod2pi(OMEGA_REVOL * t))
+end
+
+"""
+    get_pointings(ss, start, stop, step) -> (θ, φ, ψ, time)
+
+Same as `get_pointings(ss, start, stop)`, but the anti-Sun direction advances
+by 360/365.25 degrees every `step` seconds instead of continuously.
+"""
 function get_pointings(ss::ScanningStrategy, start, stop, step)
-    resol = Resolution(ss.nside)
-    omega_spin = rpm2angfreq(ss.spin_rpm)
-    omega_prec = rpm2angfreq(ss.prec_rpm)
-    omega_revol = (2π) / (60.0 * 60.0 * 24.0 * 365.25)
-    time_array = start:1/ss.sampling_rate:stop-1/ss.sampling_rate |> LinRange
-    if start > stop-1/ss.sampling_rate
-        error("ERROR: \n The `start` time of the calculation is greater than or equal to the `stop` time.")
-    end
-    loop_times = length(time_array)
-    numof_det = length(ss.quat)
-
-    psi_tod = zeros(loop_times, numof_det)
-    theta_tod = zeros(loop_times, numof_det)
-    phi_tod = zeros(loop_times, numof_det)
-
-    ex = @SVector [1.0, 0.0, 0.0]
-    ey = @SVector [0.0, 1.0, 0.0]
-    ez = @SVector [0.0, 0.0, 1.0]
-    spin_axis = @SVector [cosd(ss.alpha), 0, sind(ss.alpha)]
-    q_scan_direction     = Quaternion(0.,0.,1.,0.)
-    q_point, q_pol_angle = imo2ecl_coordinates(ss)
-    q_solar_system       = rotate_quat(ss.start_angle, ez)
-    deg_per_day = 360/365.25
-    @views @inbounds for i = eachindex(ss.quat)
-        q_point_idet     = q_point[i]
-        q_pol_angle_idet = q_pol_angle[i]
-        @views @inbounds for j = eachindex(time_array)
-            t              = time_array[j]
-            revol_angle    = deg2rad(deg_per_day * floor(t/step))
-            q_revol        = rotate_quat(revol_angle, ez)
-            q_prec         = rotate_quat(omega_prec,  t, ex)
-            q_spin         = rotate_quat(omega_spin,  t, spin_axis)
-
-            Q              = q_solar_system * q_revol * q_prec * q_spin
-            q_point_t      = Q * q_point_idet / Q
-            q_pol_t        = Q * q_pol_angle_idet / Q
-
-            vec_point      = vect(q_point_t)
-            poldir         = vect(q_pol_t)
-
-            θ, ϕ           = vec2ang(vec_point[1], vec_point[2], vec_point[3])
-            theta_tod[j,i] = θ
-            phi_tod[j,i]   = ϕ
-            psi_tod[j,i]   = polarization_angle(θ, ϕ, poldir)
-        end
-    end
-    if ss.coord == "G"
-        rotate_coordinates_e2g!(theta_tod, phi_tod, psi_tod)
-    end
-    return (theta_tod, phi_tod, psi_tod, time_array)
+	time_array = _time_array(ss, start, stop)
+	det_dirs, pol_dirs = imo2ecl_coordinates(ss)
+	deg_per_day = 360 / 365.25
+	return _pointings(ss, time_array, det_dirs, pol_dirs, t -> deg2rad(deg_per_day * floor(t / step)))
 end
 
 """
@@ -357,15 +307,10 @@ This function will return pointing pixel tod as tuple.
 """
 @inline function get_pointing_pixels(ss, start, stop)
 	theta_tod, phi_tod, psi_tod, time_array = get_pointings(ss, start, stop)
-	loop_times = length(theta_tod[:, 1])
-	numOfdet = length(theta_tod[1, :])
 	resol = Resolution(ss.nside)
-
-	pix_tod = @views zeros(Int64, loop_times, numOfdet)
-	for j in eachindex(theta_tod[1, :])
-		for i in eachindex(theta_tod[:, 1])
-			pix_tod[i, j] = @views ang2pixRing(resol, theta_tod[i, j], phi_tod[i, j])
-		end
+	pix_tod = zeros(Int64, size(theta_tod))
+	for i in eachindex(theta_tod)
+		pix_tod[i] = ang2pixRing(resol, theta_tod[i], phi_tod[i])
 	end
 	return (pix_tod, psi_tod, time_array)
 end
@@ -373,13 +318,8 @@ end
 function angtod2hitmap(nside::Int, theta_tod, phi_tod)
 	resol = Resolution(nside)
 	hit_map = zeros(resol.numOfPixels)
-	for j in eachindex(theta_tod[1, :])
-		theta_tod_jth_det = @views theta_tod[:, j]
-		phi_tod_jth_det = @views phi_tod[:, j]
-		@inbounds for k in eachindex(theta_tod[:, 1])
-			ipix = @views ang2pixRing(resol, theta_tod_jth_det[k], phi_tod_jth_det[k])
-			hit_map[ipix] += 1
-		end
+	@inbounds for k in eachindex(theta_tod)
+		hit_map[ang2pixRing(resol, theta_tod[k], phi_tod[k])] += 1
 	end
 	return hit_map
 end
@@ -410,86 +350,39 @@ function normarize!(resol::Resolution, maps::Array, hitmap::Array)
 end
 
 
-# Updates for calculating the trajectory of any detector
+# Pointings of detectors placed at arbitrary positions on the focal plane.
 
+"""
+    ang_to_quat(theta, phi) -> Vector{Float64}
+
+Quaternion `(x, y, z, w)` that moves the boresight to the focal-plane position
+`(theta, phi)` (rad).
+"""
 function ang_to_quat(theta, phi)
-    ey = [0.0, 1.0, 0.0]
-    ez = [0.0, 0.0, 1.0]
-    temp = rotate_quat(phi, ez) * rotate_quat(theta, ey)
-    return [temp[2], temp[3], temp[4], temp[1]] # Adjust to the formation required by the Falcons
+	q = rotate_quat(phi, EZ) * rotate_quat(theta, EY)
+	return [q.x, q.y, q.z, q.w]
 end
 
 function get_q_dets_q_pol_dets(ss::ScanningStrategy)
-    ex          = [1.0, 0.0, 0.0]
-	ey          = [0.0, 1.0, 0.0]
-	ez          = [0.0, 0.0, 1.0]
-	q_boresight = Quaternion(0.0, 0.0, 0.0, 1.0)
-	q_pol       = Quaternion(0.0, 1.0, 0.0, 0.0)
-	q_dets      = [Quaternion{Float64}(I) for i in eachindex(ss.quat)]
-	q_pol_dets  = [Quaternion{Float64}(I) for i in eachindex(ss.quat)]
-	q_gamma     = 0.0
-	polang      = 0.0
-    for i in eachindex(ss.quat)
-        q_initial     = Quaternion(ss.quat[i][4], ss.quat[i][1], ss.quat[i][2], ss.quat[i][3])
-        if ss.start_point == "pole"
-			flip = π
-		elseif ss.start_point == "equator"
-			flip = 0.0
-		end
-        Q = rotate_quat(deg2rad(90.0 - ss.alpha), ey) * rotate_quat(flip, ez) * rotate_quat(deg2rad(ss.beta), ey) * q_initial
-        q_dets[i]     = Q * q_boresight / Q
-		q_pol_dets[i] = Q * q_pol / Q
-    end
-    return (q_dets, q_pol_dets)
+	q_dets     = [zero(SVector{3, Float64}) for i in eachindex(ss.quat)]
+	q_pol_dets = [zero(SVector{3, Float64}) for i in eachindex(ss.quat)]
+	for i in eachindex(ss.quat)
+		q_initial = Quaternion(ss.quat[i])
+		Q = rotate_quat(deg2rad(90.0 - ss.alpha), EY) * rotate_quat(_flip_angle(ss), EZ) * rotate_quat(deg2rad(ss.beta), EY) * q_initial
+		q_dets[i]     = rotate(Q, EZ)
+		q_pol_dets[i] = rotate(Q, EX)
+	end
+	return (q_dets, q_pol_dets)
 end
 
+"""
+    get_pointings_arbitrary_dets(ss, start, stop) -> (θ, φ, ψ, time)
+
+Like `get_pointings`, but every entry of `ss.quat` is used directly as the
+detector's focal-plane rotation (see [`ang_to_quat`](@ref)), whatever its name.
+"""
 function get_pointings_arbitrary_dets(ss::ScanningStrategy, start, stop)
-	resol = Resolution(ss.nside)
-	omega_spin = rpm2angfreq(ss.spin_rpm)
-	omega_prec = rpm2angfreq(ss.prec_rpm)
-	omega_revol = (2π) / (60.0 * 60.0 * 24.0 * 365.25)
-	time_array = start:1/ss.sampling_rate:stop-1/ss.sampling_rate |> LinRange
-	if start > stop - 1 / ss.sampling_rate
-		error("ERROR: \n The `start` time of the calculation is greater than or equal to the `stop` time.")
-	end
-	loop_times = length(time_array)
-	numof_det = length(ss.quat)
-
-	psi_tod = zeros(loop_times, numof_det)
-	theta_tod = zeros(loop_times, numof_det)
-	phi_tod = zeros(loop_times, numof_det)
-
-	ex                   = @SVector [1.0, 0.0, 0.0]
-	ey                   = @SVector [0.0, 1.0, 0.0]
-	ez                   = @SVector [0.0, 0.0, 1.0]
-	spin_axis            = @SVector [cosd(ss.alpha), 0, sind(ss.alpha)]
-	q_scan_direction     = Quaternion(0.0, 0.0, 1.0, 0.0)
-	q_point, q_pol_angle = get_q_dets_q_pol_dets(ss)
-	q_solar_system       = rotate_quat(ss.start_angle, ez)
-	@views @inbounds for i ∈ eachindex(ss.quat)
-		q_point_idet     = q_point[i]
-		q_pol_angle_idet = q_pol_angle[i]
-		@views @inbounds @threads for j ∈ eachindex(time_array)
-			t       = time_array[j]
-			q_revol = rotate_quat(omega_revol, t, ez)
-			q_prec  = rotate_quat(omega_prec, t, ex)
-			q_spin  = rotate_quat(omega_spin, t, spin_axis)
-
-			Q         = q_solar_system * q_revol * q_prec * q_spin
-			q_point_t = Q * q_point_idet / Q
-			q_pol_t   = Q * q_pol_angle_idet / Q
-
-			vec_point = vect(q_point_t)
-			poldir    = vect(q_pol_t)
-
-			θ, ϕ            = vec2ang(vec_point[1], vec_point[2], vec_point[3])
-			theta_tod[j, i] = θ
-			phi_tod[j, i]   = ϕ
-			psi_tod[j, i]   = polarization_angle(θ, ϕ, poldir)
-		end
-	end
-	if ss.coord == "G"
-		rotate_coordinates_e2g!(theta_tod, phi_tod, psi_tod)
-	end
-	return (theta_tod, phi_tod, psi_tod, time_array)
+	time_array = _time_array(ss, start, stop)
+	det_dirs, pol_dirs = get_q_dets_q_pol_dets(ss)
+	return _pointings(ss, time_array, det_dirs, pol_dirs, t -> mod2pi(OMEGA_REVOL * t))
 end
