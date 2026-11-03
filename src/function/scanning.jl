@@ -1,11 +1,3 @@
-@inline function vec2ang_minuspi_to_pi(x, y, z)
-	norm = sqrt(x^2 + y^2 + z^2)
-	theta = acos(z / norm)
-	phi = atan(y, x)
-	phi = ifelse(phi > π, π - phi, phi)
-	return (theta, phi)
-end
-
 @inline function rotate_quat(omega, t, rotate_axis)
 	#= Generate a quaternion that rotates by the angle omega*t around the rotate_axis axis. =#
 	rot_ang = mod2pi(omega * t)
@@ -155,65 +147,6 @@ function get_satellite(satellite)
 		info = DataFrame(),
 	)
 end
-
-#=
-function imo2ecl_coordinates(ss::ScanningStrategy)
-	#=
-	This function is loading imo directory. The imo v2.0< have a bug that LFT orientation.
-	In order to modify the bug, the comment of `g_gamma` have to be erase.
-	=#
-	ex          = [1.0, 0.0, 0.0]
-	ey          = [0.0, 1.0, 0.0]
-	ez          = [0.0, 0.0, 1.0]
-	q_boresight = Quaternion(0.0, 0.0, 0.0, 1.0)
-	q_pol       = Quaternion(0.0, 1.0, 0.0, 0.0)
-	q_dets      = [Quaternion{Float64}(I) for i in eachindex(ss.quat)]
-	q_pol_dets  = [Quaternion{Float64}(I) for i in eachindex(ss.quat)]
-	q_gamma     = 0.0
-	polang      = 0.0
-	for i in eachindex(ss.quat)
-		if ss.name[i] == "boresight"
-			if ss.start_point == "pole"
-				flip = π
-			elseif ss.start_point == "equator"
-				flip = 0.0
-			end
-			Q             = rotate_quat(deg2rad(90.0 - ss.alpha), ey) * rotate_quat(flip, ez) * rotate_quat(deg2rad(ss.beta), ey)
-			q_dets[i]     = Q * q_boresight / Q
-			q_pol_dets[i] = Q * q_pol / Q
-		elseif hasproperty(ss.info, :pixtype) # before reformation imo
-			telescope = split.(ss.name[i], "_")[1]
-			q_imo     = Quaternion(ss.quat[i][4], ss.quat[i][1], ss.quat[i][2], ss.quat[i][3])
-			if telescope == "000" #LFT
-				#q_gamma = rotate_quat(deg2rad(270), ez)
-				q_gamma = rotate_quat(deg2rad(ss.gamma), ez)
-			elseif telescope == "001" #MFT
-				#q_gamma = rotate_quat(deg2rad(240), ez)
-				q_gamma = rotate_quat(deg2rad(ss.gamma), ez)
-			elseif telescope == "002" #HFT
-				#q_gamma = rotate_quat(deg2rad(30), ez)
-				q_gamma = rotate_quat(deg2rad(ss.gamma), ez)
-			end
-		else
-			q_gamma = rotate_quat(deg2rad(270.0), ez)
-		end
-		Q = rotate_quat(deg2rad(ss.beta), ey) * q_gamma * q_imo
-		if hasproperty(ss.info, :pixtype) # before reformation imo
-			if telescope == "001" #MFT
-				Q = rotate_quat(π, ez) * Q
-			elseif telescope == "002" #HFT
-				Q = rotate_quat(π, ez) * Q
-			end
-		end
-		Q             = rotate_quat(deg2rad(90.0 - ss.alpha), ey) * Q
-		q_dets[i]     = Q * q_boresight / Q
-		q_pol_dets[i] = Q * q_pol / Q
-		#q_scan_dets[i] = Q * q_scan / Q
-
-	end
-	return (q_dets, q_pol_dets)
-end
-=#
 
 function imo2ecl_coordinates(ss::ScanningStrategy)
 	#=

@@ -10,7 +10,7 @@ function sim_det_scanfields(tomlfile_path::String)
         reformation = parse(Bool, tomlfile["general"]["reformation"])
     else
         println("Key 'reformation' does not exist in tomlfile['general'].")
-        reformation = nothing  # デフォルト値を設定するなどの処理
+        reformation = nothing
     end
     inst_info        = get_instrument_info(imo, telescope)
     channel_list     = get_channel_list(imo)

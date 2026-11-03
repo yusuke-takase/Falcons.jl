@@ -19,7 +19,7 @@ function get_channel_list(imo::Imo)
 end
 
 function get_channel_info(imo::Imo)
-    df = DataFrame()  # 空のDataFrameを初期化
+    df = DataFrame()
 
     for i in eachindex(imo.imo["data_files"])
         if imo.imo["data_files"][i]["name"] == "channel_info"
