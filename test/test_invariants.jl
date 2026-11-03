@@ -35,9 +35,25 @@ end
 
 @testset "ecliptic to galactic" begin
 	# The north ecliptic pole sits at (l, b) ≈ (96.3843°, 29.8113°).
-	θ_g, φ_g, _ = _rotate_coordinates_and_pol_e2g_for_one_sample(0.0, 0.0, 0.0)
+	θ_g, φ_g, _ = Falcons._rotate_coordinates_and_pol_e2g_for_one_sample(0.0, 0.0, 0.0)
 	@test rad2deg(φ_g) ≈ 96.3843 atol = 1e-3
 	@test rad2deg(π / 2 - θ_g) ≈ 29.8113 atol = 1e-3
+	v = rotate_vector_e2g!([0.0, 0.0, 1.0])
+	@test v ≈ Falcons.NORTH_POLE_VEC
+	@test v ≈ [sin(θ_g) * cos(φ_g), sin(θ_g) * sin(φ_g), cos(θ_g)]
+end
+
+@testset "hit maps from angles and pixels" begin
+	ss = gen_ScanningStrategy(nside = 8, duration = 300, sampling_rate = 1.0)
+	θ, φ, _, _ = get_pointings(ss, 0, 300)
+	pix, _, _ = get_pointing_pixels(ss, 0, 300)
+	@test hitmap_from_angles(8, θ, φ) == hitmap_from_pixels(8, pix)
+	@test sum(hitmap_from_pixels(8, pix)) == 300
+end
+
+@testset "known satellites" begin
+	@test get_satellite("LiteBIRD").alpha == 45.0
+	@test_throws ArgumentError get_satellite("Unknown")
 end
 
 @testset "scan field invariants" begin

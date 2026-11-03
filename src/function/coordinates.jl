@@ -14,11 +14,11 @@ const ECL_TO_GAL_ROT_MATRIX = @SMatrix [
 const NORTH_POLE_VEC = ECL_TO_GAL_ROT_MATRIX[:, 3]
 
 """
-    rotate_vec_ecl_to_gal_coordinates!(v) -> v
+    rotate_vector_e2g!(v) -> v
 
 Rotate the 3-vector `v` in place from Ecliptic to Galactic coordinates.
 """
-function rotate_vec_ecl_to_gal_coordinates!(v::AbstractVector{<:AbstractFloat})
+function rotate_vector_e2g!(v::AbstractVector{<:AbstractFloat})
 	v .= ECL_TO_GAL_ROT_MATRIX * SVector{3}(v[1], v[2], v[3])
 	return v
 end

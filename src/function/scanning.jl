@@ -5,20 +5,6 @@ const EZ = SVector(0.0, 0.0, 1.0)
 "Angular velocity of the anti-Sun direction (rad/s), one revolution per 365.25 days."
 const OMEGA_REVOL = 2π / (60.0 * 60.0 * 24.0 * 365.25)
 
-"""
-    rotate_quat(omega, t, axis) -> Quaternion
-
-Quaternion of the rotation by `mod2pi(omega * t)` around `axis`.
-"""
-@inline rotate_quat(omega, t, rotate_axis) = rotation_quat(rotate_axis, mod2pi(omega * t))
-
-"""
-    rotate_quat(ϕ, axis) -> Quaternion
-
-Quaternion of the rotation by `ϕ` (rad) around `axis`.
-"""
-@inline rotate_quat(ϕ, rotate_axis) = rotation_quat(rotate_axis, ϕ)
-
 mutable struct ScanningStrategy{T <: AbstractFloat, I <: Int, AS <: AbstractString}
 	nside::I
 	duration::I
@@ -45,10 +31,10 @@ function show_ss(ss::ScanningStrategy)
 	@printf("%-24s : %0.1f \n", "beta [deg]", ss.beta)
 	@printf("%-24s : %0.1f \n", "gamma [deg]", ss.gamma)
 
-	@printf("%-24s : %0.3f\n", "prec. period [min]", period2rpm(ss.prec_rpm))
+	@printf("%-24s : %0.3f\n", "prec. period [min]", rpm2period(ss.prec_rpm))
 	@printf("%1s %-22s : %f\n", '↳', "prec. rate [rpm]", ss.prec_rpm)
 
-	@printf("%-24s : %0.3f\n", "spin period [min]", period2rpm(ss.spin_rpm))
+	@printf("%-24s : %0.3f\n", "spin period [min]", rpm2period(ss.spin_rpm))
 	@printf("%1s %-22s : %f\n", '↳', "spin rate [rpm]", ss.spin_rpm)
 	@printf("%-24s : %f \n", "HWP rot. rate[rpm]", ss.hwp_rpm)
 	@printf("%-24s : %f \n", "start angle", ss.start_angle)
@@ -136,11 +122,8 @@ function get_satellite(satellite)
 	T_alpha       = [60.0, six_month_min, 10 * 60, four_day_min, 3.2 * 60, 192.348] # min
 	T_beta        = [129 / 60, 1, 1, 2, 1, 20.0] # min
 
-	if satellite in satellites
-		idx = findfirst(x -> x == satellite, satellites)
-	else
-		return "Satellite not found in the list."
-	end
+	idx = findfirst(==(satellite), satellites)
+	idx === nothing && throw(ArgumentError("unknown satellite \"$satellite\"; choose one of $(join(satellites, ", "))"))
 	ss = gen_ScanningStrategy(;
 		nside = 128,
 		duration = 60 * 60 * 24 * 365,
@@ -175,25 +158,25 @@ function imo2ecl_coordinates(ss::ScanningStrategy)
 	q_pol_dets = [zero(SVector{3, Float64}) for i in eachindex(ss.quat)]
 	for i in eachindex(ss.quat)
 		if ss.name[i] == "boresight"
-			Q = rotate_quat(deg2rad(90.0 - ss.alpha), EY) * rotate_quat(_flip_angle(ss), EZ) * rotate_quat(deg2rad(ss.beta), EY)
+			Q = quat_rotation(deg2rad(90.0 - ss.alpha), EY) * quat_rotation(_flip_angle(ss), EZ) * quat_rotation(deg2rad(ss.beta), EY)
 		elseif hasproperty(ss.info, :pixtype) # IMO before the reformation
 			telescope = split(ss.name[i], "_")[1]
 			q_imo     = Quaternion(ss.quat[i])
-			q_gamma   = rotate_quat(deg2rad(ss.gamma), EZ)
-			Q = rotate_quat(deg2rad(ss.beta), EY) * q_gamma * q_imo
+			q_gamma   = quat_rotation(deg2rad(ss.gamma), EZ)
+			Q = quat_rotation(deg2rad(ss.beta), EY) * q_gamma * q_imo
 			if telescope == "001" || telescope == "002" # MFT, HFT
-				Q = rotate_quat(π, EZ) * Q
+				Q = quat_rotation(π, EZ) * Q
 			end
-			Q = rotate_quat(deg2rad(90.0 - ss.alpha), EY) * Q
+			Q = quat_rotation(deg2rad(90.0 - ss.alpha), EY) * Q
 		elseif split(ss.name[i], "_")[1] == "999" # IMO after the reformation
 			q_imo   = Quaternion(ss.quat[i])
-			q_gamma = rotate_quat(deg2rad(90 + ss.gamma), EZ)
-			Q = rotate_quat(deg2rad(90.0 - ss.alpha), EY) * (rotate_quat(deg2rad(ss.beta), EY) * q_gamma * q_imo)
+			q_gamma = quat_rotation(deg2rad(90 + ss.gamma), EZ)
+			Q = quat_rotation(deg2rad(90.0 - ss.alpha), EY) * (quat_rotation(deg2rad(ss.beta), EY) * q_gamma * q_imo)
 		else
 			continue
 		end
-		q_dets[i]     = rotate(Q, EZ)
-		q_pol_dets[i] = rotate(Q, EX)
+		q_dets[i]     = rotate_vector(Q, EZ)
+		q_pol_dets[i] = rotate_vector(Q, EX)
 	end
 	return (q_dets, q_pol_dets)
 end
@@ -233,7 +216,7 @@ function _pointings(ss::ScanningStrategy, time_array, det_dirs, pol_dirs, revol_
 	omega_spin = rpm2angfreq(ss.spin_rpm)
 	omega_prec = rpm2angfreq(ss.prec_rpm)
 	spin_axis  = SVector(cosd(ss.alpha), 0.0, sind(ss.alpha))
-	q_sun      = rotate_quat(ss.start_angle, EZ)
+	q_sun      = quat_rotation(ss.start_angle, EZ)
 
 	nsamples  = length(time_array)
 	theta_tod = zeros(nsamples, length(det_dirs))
@@ -243,12 +226,12 @@ function _pointings(ss::ScanningStrategy, time_array, det_dirs, pol_dirs, revol_
 		d, p = det_dirs[i], pol_dirs[i]
 		@threads for j in 1:nsamples
 			t = time_array[j]
-			Q = q_sun * rotate_quat(revol_angle(t), EZ) * rotate_quat(omega_prec, t, EX) * rotate_quat(omega_spin, t, spin_axis)
-			vec_point = rotate(Q, d)
+			Q = q_sun * quat_rotation(revol_angle(t), EZ) * quat_rotation(mod2pi(omega_prec * t), EX) * quat_rotation(mod2pi(omega_spin * t), spin_axis)
+			vec_point = rotate_vector(Q, d)
 			θ, ϕ = vec2ang(vec_point[1], vec_point[2], vec_point[3])
 			theta_tod[j, i] = θ
 			phi_tod[j, i] = ϕ
-			psi_tod[j, i] = polarization_angle(θ, ϕ, rotate(Q, p))
+			psi_tod[j, i] = polarization_angle(θ, ϕ, rotate_vector(Q, p))
 		end
 	end
 	if ss.coord == "G"
@@ -315,7 +298,12 @@ This function will return pointing pixel tod as tuple.
 	return (pix_tod, psi_tod, time_array)
 end
 
-function angtod2hitmap(nside::Int, theta_tod, phi_tod)
+"""
+    hitmap_from_angles(nside, θ, φ) -> Vector{Float64}
+
+RING hit map of the directions `(θ[k], φ[k])`.
+"""
+function hitmap_from_angles(nside::Int, theta_tod, phi_tod)
 	resol = Resolution(nside)
 	hit_map = zeros(resol.numOfPixels)
 	@inbounds for k in eachindex(theta_tod)
@@ -324,7 +312,12 @@ function angtod2hitmap(nside::Int, theta_tod, phi_tod)
 	return hit_map
 end
 
-function pixtod2hitmap(nside::Int, pixtod)
+"""
+    hitmap_from_pixels(nside, pixels) -> Vector{Float64}
+
+Hit map of the (1-based RING) pixel indices `pixels`.
+"""
+function hitmap_from_pixels(nside::Int, pixtod)
 	resol = Resolution(nside)
 	hit_map = zeros(resol.numOfPixels)
 	for i in eachindex(pixtod)
@@ -332,23 +325,6 @@ function pixtod2hitmap(nside::Int, pixtod)
 	end
 	return hit_map
 end
-
-function normarize!(resol::Resolution, maps::Array, hitmap::Array)
-	if size(maps) == (3, 1, resol.numOfPixels)
-		for i in 1:3
-			maps[i, 1, :] ./= hitmap
-		end
-	end
-	if size(maps) == (3, 3, resol.numOfPixels)
-		for i in 1:3
-			for j in 1:3
-				maps[i, j, :] ./= hitmap
-			end
-		end
-	end
-	return maps
-end
-
 
 # Pointings of detectors placed at arbitrary positions on the focal plane.
 
@@ -359,7 +335,7 @@ Quaternion `(x, y, z, w)` that moves the boresight to the focal-plane position
 `(theta, phi)` (rad).
 """
 function ang_to_quat(theta, phi)
-	q = rotate_quat(phi, EZ) * rotate_quat(theta, EY)
+	q = quat_rotation(phi, EZ) * quat_rotation(theta, EY)
 	return [q.x, q.y, q.z, q.w]
 end
 
@@ -368,9 +344,9 @@ function get_q_dets_q_pol_dets(ss::ScanningStrategy)
 	q_pol_dets = [zero(SVector{3, Float64}) for i in eachindex(ss.quat)]
 	for i in eachindex(ss.quat)
 		q_initial = Quaternion(ss.quat[i])
-		Q = rotate_quat(deg2rad(90.0 - ss.alpha), EY) * rotate_quat(_flip_angle(ss), EZ) * rotate_quat(deg2rad(ss.beta), EY) * q_initial
-		q_dets[i]     = rotate(Q, EZ)
-		q_pol_dets[i] = rotate(Q, EX)
+		Q = quat_rotation(deg2rad(90.0 - ss.alpha), EY) * quat_rotation(_flip_angle(ss), EZ) * quat_rotation(deg2rad(ss.beta), EY) * q_initial
+		q_dets[i]     = rotate_vector(Q, EZ)
+		q_pol_dets[i] = rotate_vector(Q, EX)
 	end
 	return (q_dets, q_pol_dets)
 end

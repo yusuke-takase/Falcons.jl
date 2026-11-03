@@ -20,14 +20,14 @@ include("./function/units.jl")
 include("./function/pipelines.jl")
 
 # quaternions.jl
-export Quaternion, rotation_quat
+export Quaternion, quat_rotation, quat_rotation_x, quat_rotation_y, quat_rotation_z, rotate_vector
 
 # scanning.jl
-export rotate_quat, show_ss
+export show_ss
 export ScanningStrategy, pointings
 export gen_ScanningStrategy, get_satellite
 export get_pointings, get_pointing_pixels
-export angtod2hitmap, pixtod2hitmap, normarize!
+export hitmap_from_angles, hitmap_from_pixels
 export ang_to_quat, get_pointings_arbitrary_dets
 
 # imo.jl
@@ -38,14 +38,13 @@ export get_pol_angle, imo2ecl_coordinates
 
 # units.jl
 export period2rpm, rpm2angfreq, rpm2period, arcmin2rad
-export convert_maps
 
 # scanfields.jl
 export ScanField, get_scanfield_step
 export h_nm, get_hnm_quantify, get_scanfield
 
 # coordinates.jl
-export _ang2galvec_one_sample, rotate_coordinates_e2g!, rotate_vec_ecl_to_gal_coordinates!, _rotate_coordinates_and_pol_e2g_for_one_sample
+export rotate_coordinates_e2g!, rotate_vector_e2g!
 
 # pipelines.jl
 export sim_det_scanfields, create_h5_file

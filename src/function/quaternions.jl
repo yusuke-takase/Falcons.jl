@@ -5,7 +5,7 @@ Quaternion with vector part `(x, y, z)` and scalar part `w`, stored in the same
 `(x, y, z, w)` order as litebird_sim and as the `quat` entries of the IMO.
 
 Products follow the Hamilton convention and rotations are active: the vector
-`v` is rotated to `q v q*` (see [`rotate`](@ref)). The type is `isbits`, so it can
+`v` is rotated to `q v q*` (see [`rotate_vector`](@ref)). The type is `isbits`, so it can
 be passed to GPU kernels.
 """
 struct Quaternion{T <: Real}
@@ -63,23 +63,30 @@ components(q::Quaternion) = SVector(q.x, q.y, q.z, q.w)
 vector_part(q::Quaternion) = SVector(q.x, q.y, q.z)
 
 """
-    rotation_quat(axis, angle) -> Quaternion
+    quat_rotation(θ, axis) -> Quaternion
 
-Quaternion of the right-handed rotation by `angle` (rad) around the unit vector
-`axis`.
+Quaternion of the right-handed rotation by `θ` (rad) around the unit vector
+`axis`. Same as `quat_rotation` in litebird_sim.
 """
-@inline function rotation_quat(axis, angle)
-	s, c = sincos(angle / 2)
+@inline function quat_rotation(θ, axis)
+	s, c = sincos(θ / 2)
 	return Quaternion(axis[1] * s, axis[2] * s, axis[3] * s, c)
 end
 
+"Quaternion of the rotation by `θ` (rad) around the x axis."
+@inline quat_rotation_x(θ) = (s = sin(θ / 2); Quaternion(s, zero(s), zero(s), cos(θ / 2)))
+"Quaternion of the rotation by `θ` (rad) around the y axis."
+@inline quat_rotation_y(θ) = (s = sin(θ / 2); Quaternion(zero(s), s, zero(s), cos(θ / 2)))
+"Quaternion of the rotation by `θ` (rad) around the z axis."
+@inline quat_rotation_z(θ) = (s = sin(θ / 2); Quaternion(zero(s), zero(s), s, cos(θ / 2)))
+
 """
-    rotate(q::Quaternion, v) -> SVector{3}
+    rotate_vector(q::Quaternion, v) -> SVector{3}
 
 Rotate the 3-vector `v` by the unit quaternion `q`, i.e. return the vector part
-of `q v q*`.
+of `q v q*`. Same as `rotate_vector` in litebird_sim.
 """
-@inline function rotate(q::Quaternion, v)
+@inline function rotate_vector(q::Quaternion, v)
 	# v' = v + 2 w (u × v) + 2 u × (u × v), with u the vector part of q.
 	u = SVector(q.x, q.y, q.z)
 	vv = SVector{3}(v[1], v[2], v[3])

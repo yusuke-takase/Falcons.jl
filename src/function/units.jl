@@ -31,11 +31,3 @@ function rpm2period(rpm,; unit="min")
     end
     return period
 end
-
-function convert_maps(healpy_maps)
-    PolarizedHealpixMap{Float64,RingOrder}(
-        healpy_maps[1,:], 
-        healpy_maps[2,:], 
-        healpy_maps[3,:],
-    )
-end
