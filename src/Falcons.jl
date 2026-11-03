@@ -4,16 +4,12 @@ using Healpix
 using LinearAlgebra
 using Base.Threads
 using StaticArrays
-using ProgressMeter
 using JSON
 using DataFrames
-using SkyCoords
 using Printf
 using Statistics
 using TOML
 using HDF5
-using Base.Filesystem
-using NaNStatistics
 
 include("./function/quaternions.jl")
 include("./function/scanning.jl")

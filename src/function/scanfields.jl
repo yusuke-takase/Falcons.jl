@@ -31,6 +31,9 @@ function h_nm(hₙₘ::Array, spin_n::AbstractVector, spin_m::AbstractVector, n:
 	return hₙₘ[i, j, :]
 end
 
+_nanmean(x) = mean(filter(!isnan, x))
+_nanstd(x) = std(filter(!isnan, x))
+
 function get_hnm_quantify(hₙₘ, spin_n, spin_m)
 	df = DataFrame(n            = repeat(spin_n, inner=length(spin_m)),
 	               m            = repeat(spin_m, outer=length(spin_n)),
@@ -47,8 +50,8 @@ function get_hnm_quantify(hₙₘ, spin_n, spin_m)
 			abs2_field = abs2.(h_nm(hₙₘ, spin_n, spin_m, _n, _m))
 			df[row, :mean]         = mean(abs2_field)
 			df[row, :std]          = std(abs2_field)
-			df[row, :nanmean]      = nanmean(abs2_field)
-			df[row, :nanstd]       = nanstd(abs2_field)
+			df[row, :nanmean]      = _nanmean(abs2_field)
+			df[row, :nanstd]       = _nanstd(abs2_field)
 			df[row, :nan2one_mean] = mean(replace(abs2_field, NaN=>1.0))
 			df[row, :nan2one_std]  = std(replace(abs2_field, NaN=>1.0))
 		end
@@ -57,14 +60,14 @@ function get_hnm_quantify(hₙₘ, spin_n, spin_m)
 end
 
 """
-    _scanfield(ss, pointings_between; division, spin_n, spin_m)
+    _scanfield(ss, pointings_between; division, spin_n, spin_m, verbose = false)
 
 Accumulate the hit map and spin moments, computing the pointings of
 `division` consecutive time chunks with `pointings_between(start, stop)`.
 Chunk boundaries are whole seconds, so `division` need not divide the
-duration.
+duration. With `verbose = true` a message is logged after every chunk.
 """
-function _scanfield(ss::ScanningStrategy, pointings_between::F; division::Int, spin_n::AbstractVector, spin_m::AbstractVector) where {F}
+function _scanfield(ss::ScanningStrategy, pointings_between::F; division::Int, spin_n::AbstractVector, spin_m::AbstractVector, verbose::Bool = false) where {F}
 	division >= 1 || throw(ArgumentError("division must be ≥ 1, got $division"))
 	resol  = Resolution(ss.nside)
 	npix   = nside2npix(ss.nside)
@@ -72,7 +75,6 @@ function _scanfield(ss::ScanningStrategy, pointings_between::F; division::Int, s
 	hitmap = zeros(Int64, npix)
 	hₙₘ    = zeros(ComplexF64, (length(spin_n), length(spin_m), npix))
 	polang = [get_pol_angle(ss, j) for j in eachindex(ss.quat)]
-	progress = Progress(division)
 	for i in 1:division
 		chunk_start = div((i - 1) * ss.duration, division)
 		chunk_stop  = div(i * ss.duration, division)
@@ -86,7 +88,7 @@ function _scanfield(ss::ScanningStrategy, pointings_between::F; division::Int, s
 				hₙₘ[_n, _m, Ω] += cis(-(spin_n[_n] * ψ + spin_m[_m] * ϕ))
 			end
 		end
-		next!(progress)
+		verbose && @info "scan field: chunk $i/$division done" chunk_stop
 	end
 	for p in 1:npix, _m in eachindex(spin_m), _n in eachindex(spin_n)
 		hₙₘ[_n, _m, p] /= hitmap[p]
@@ -96,22 +98,22 @@ function _scanfield(ss::ScanningStrategy, pointings_between::F; division::Int, s
 end
 
 """
-    get_scanfield(ss; division, spin_n, spin_m) -> ScanField
+    get_scanfield(ss; division, spin_n, spin_m, verbose = false) -> ScanField
 
 Hit map and spin moments `h_{n,m}` of the whole scan (`0 ≤ t < ss.duration`),
 for every combination of `n ∈ spin_n` and `m ∈ spin_m`. The pointings are
 computed in `division` time chunks to bound memory use.
 """
-function get_scanfield(ss::ScanningStrategy; division::Int, spin_n::AbstractVector, spin_m::AbstractVector)
-	return _scanfield(ss, (a, b) -> get_pointings(ss, a, b); division, spin_n, spin_m)
+function get_scanfield(ss::ScanningStrategy; division::Int, spin_n::AbstractVector, spin_m::AbstractVector, verbose::Bool = false)
+	return _scanfield(ss, (a, b) -> get_pointings(ss, a, b); division, spin_n, spin_m, verbose)
 end
 
 """
-    get_scanfield_step(ss; division, spin_n, spin_m, step) -> ScanField
+    get_scanfield_step(ss; division, spin_n, spin_m, step, verbose = false) -> ScanField
 
 Same as [`get_scanfield`](@ref), with the anti-Sun direction advancing every
 `step` seconds (see `get_pointings(ss, start, stop, step)`).
 """
-function get_scanfield_step(ss::ScanningStrategy; division::Int, spin_n::AbstractVector, spin_m::AbstractVector, step)
-	return _scanfield(ss, (a, b) -> get_pointings(ss, a, b, step); division, spin_n, spin_m)
+function get_scanfield_step(ss::ScanningStrategy; division::Int, spin_n::AbstractVector, spin_m::AbstractVector, step, verbose::Bool = false)
+	return _scanfield(ss, (a, b) -> get_pointings(ss, a, b, step); division, spin_n, spin_m, verbose)
 end
