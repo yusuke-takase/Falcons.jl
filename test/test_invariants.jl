@@ -52,3 +52,15 @@ end
 		@test all(abs.(h_nm(field, n, m)[seen]) .<= 1 + 1e-12)
 	end
 end
+
+@testset "division need not divide the duration" begin
+	ss = gen_ScanningStrategy(nside = 8, duration = 601, sampling_rate = 1.0, hwp_rpm = 46.0)
+	f1 = get_scanfield(ss; division = 1, spin_n = [0, 2], spin_m = [-4, 4])
+	f7 = get_scanfield(ss; division = 7, spin_n = [0, 2], spin_m = [-4, 4])
+	@test sum(f7.hitmap) == 601
+	@test f7.hitmap == f1.hitmap
+	@test isequal(isnan.(f7.h), isnan.(f1.h))
+	seen = .!isnan.(f1.h)
+	@test maximum(abs.(f7.h[seen] .- f1.h[seen])) < 1e-12
+	@test_throws ArgumentError h_nm(f1, 1, 0)
+end

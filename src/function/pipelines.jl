@@ -67,7 +67,7 @@ function sim_det_scanfields(tomlfile_path::String)
 end
 
 
-function create_h5_file(base_path::AbstractString, filename::AbstractString, field::scanfield,; savemap=true)
+function create_h5_file(base_path::AbstractString, filename::AbstractString, field::ScanField; savemap=true)
     h5open(base_path * filename, "w") do file
         write(file, "toml/spin_n", Float64.(field.n))
         write(file, "toml/spin_m", Float64.(field.m))

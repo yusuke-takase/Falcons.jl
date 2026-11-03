@@ -45,7 +45,7 @@ export period2rpm, rpm2angfreq, rpm2period, arcmin2rad
 export convert_maps
 
 # scanfields.jl
-export scanfield, get_scanfield_step
+export ScanField, get_scanfield_step
 export h_nm, get_hnm_quantify, get_scanfield
 
 # coordinates.jl
