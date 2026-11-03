@@ -74,7 +74,7 @@ function _scanfield(ss::ScanningStrategy, pointings_between::F; division::Int, s
 	ω_hwp  = rpm2angfreq(ss.hwp_rpm)
 	hitmap = zeros(Int64, npix)
 	hₙₘ    = zeros(ComplexF64, (length(spin_n), length(spin_m), npix))
-	polang = [get_pol_angle(ss, j) for j in eachindex(ss.quat)]
+	polang = Float64[get_pol_angle(ss, j) for j in eachindex(ss.quat)]
 	for i in 1:division
 		chunk_start = div((i - 1) * ss.duration, division)
 		chunk_stop  = div(i * ss.duration, division)
