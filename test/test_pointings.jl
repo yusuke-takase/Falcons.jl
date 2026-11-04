@@ -135,8 +135,8 @@ end
 	# The plan holds no anchors, whatever the duration of the observation.
 	long = Observation(scan, inst, dets[1:2]; start_time_s = 100.0, duration_s = 30 * 86400.0, delta_time_s = 2.0)
 	short = Observation(scan, inst, dets[1:2]; start_time_s = 100.0, duration_s = 60.0, delta_time_s = 2.0)
-	@test Base.summarysize(Falcons._pointing_plan(long, Galactic, :all)) ==
-		  Base.summarysize(Falcons._pointing_plan(short, Galactic, :all))
+	@test Base.summarysize(first(Falcons._plan_data(long, Galactic, :all))) ==
+		  Base.summarysize(first(Falcons._plan_data(short, Galactic, :all)))
 	default = Falcons._CHUNK_SAMPLES[]
 	try
 		for len in (1, 2, 7, 64)
@@ -148,13 +148,13 @@ end
 			h = make_h_maps(obs; nside = 16, n_m_couples = [(0, 0), (2, 0), (2, 4)])
 			@test h.hits == ref_h.hits
 			@test h.h == ref_h.h
-			blk = Falcons._anchor_block(Falcons._pointing_plan(obs, Galactic, :all), 1, len)
-			@test size(blk.quats, 1) <= cld(len, 6) + 2  # 6 samples per anchor interval
+			blk = Falcons._anchor_block(first(Falcons._plan_data(obs, Galactic, :all)), 1, len)
+			@test size(blk.anchors, 1) <= cld(len, 6) + 2  # 6 samples per anchor interval
 			# Samples sparser than the anchors (one sample every 4 anchors).
 			sparse = Observation(scan, inst, DetectorInfo(name = "s", sampling_rate_hz = 0.125); start_time_s = 100.0,
 				duration_s = 4000.0, delta_time_s = 2.0)
-			plan = Falcons._pointing_plan(sparse, Galactic, :all)
-			@test size(Falcons._anchor_block(plan, 1, Falcons._block_length(plan)).quats, 1) <= len + 4
+			plan = first(Falcons._plan_data(sparse, Galactic, :all))
+			@test size(Falcons._anchor_block(plan, 1, Falcons._block_length(plan, sparse.n_samples)).anchors, 1) <= len + 4
 		end
 	finally
 		Falcons._CHUNK_SAMPLES[] = default

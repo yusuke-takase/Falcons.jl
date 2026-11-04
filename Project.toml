@@ -12,7 +12,14 @@ Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 
+[weakdeps]
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+
+[extensions]
+FalconsCUDAExt = "CUDA"
+
 [compat]
+CUDA = "5"
 HDF5 = "0.17.2"
 Healpix = "4.2.2"
 JSON = "0.21, 1"

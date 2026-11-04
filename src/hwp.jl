@@ -22,4 +22,4 @@ HWP angle (rad, in [−π, π]) at `time_from_sim_start_s` seconds after the sta
 of the simulation.
 """
 @inline hwp_angle(hwp::IdealHWP, time_from_sim_start_s::Real) =
-	rem2pi(hwp.start_angle_rad + hwp.ang_speed_radpsec * time_from_sim_start_s, RoundNearest)
+	_rem2pi(fma(hwp.ang_speed_radpsec, Float64(time_from_sim_start_s), hwp.start_angle_rad))

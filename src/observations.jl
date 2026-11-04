@@ -85,7 +85,7 @@ get_time_span(obs::Observation) = obs.n_samples / obs.sampling_rate_hz
 
 Absolute time (s) of the `k`-th sample (`k = 1, …, n_samples`).
 """
-@inline sample_time(obs::Observation, k::Integer) = obs.start_time_s + (k - 1) * (1 / obs.sampling_rate_hz)
+@inline sample_time(obs::Observation, k::Integer) = fma(Float64(k - 1), 1 / obs.sampling_rate_hz, obs.start_time_s)
 
 """
     get_times(obs) -> Vector{Float64}
