@@ -1,19 +1,25 @@
 name = "Falcons"
 uuid = "eba0fb4b-2daf-4740-90d2-e5655143e0a0"
-authors = ["Yusuke Takase <takase_y@s.okayama-u.ac.jp>"]
 version = "1.0.2"
+authors = ["Yusuke Takase <takase_y@s.okayama-u.ac.jp>"]
 
 [deps]
 HDF5 = "f67ccb44-e63f-5c2f-98bd-6dc0ccc4ba2f"
 Healpix = "9f4e344d-96bc-545a-84a3-ae6b9e1b672b"
+JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 
 [compat]
 HDF5 = "0.17.2"
 Healpix = "4.2.2"
+JSON = "0.21, 1"
 LinearAlgebra = "1"
+Printf = "1"
 StaticArrays = "1.2"
+TOML = "1"
 Test = "1"
 julia = "1.10"
 
