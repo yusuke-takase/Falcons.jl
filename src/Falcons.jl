@@ -11,13 +11,13 @@ using Statistics
 using TOML
 using HDF5
 
-include("./function/quaternions.jl")
-include("./function/scanning.jl")
-include("./function/imo.jl")
-include("./function/scanfields.jl")
-include("./function/coordinates.jl")
-include("./function/units.jl")
-include("./function/pipelines.jl")
+include("quaternions.jl")
+include("scanning.jl")
+include("imo.jl")
+include("scanfields.jl")
+include("coordinates.jl")
+include("units.jl")
+include("pipelines.jl")
 
 # quaternions.jl
 export Quaternion, quat_rotation, quat_rotation_x, quat_rotation_y, quat_rotation_z, rotate_vector
