@@ -135,8 +135,8 @@ end
 	# The plan holds no anchors, whatever the duration of the observation.
 	long = Observation(scan, inst, dets[1:2]; start_time_s = 100.0, duration_s = 30 * 86400.0, delta_time_s = 2.0)
 	short = Observation(scan, inst, dets[1:2]; start_time_s = 100.0, duration_s = 60.0, delta_time_s = 2.0)
-	@test Base.summarysize(Falcons._pointing_plan(long, Galactic, :all)) ==
-		  Base.summarysize(Falcons._pointing_plan(short, Galactic, :all))
+	@test Base.summarysize(first(Falcons._plan_data(long, Galactic, :all))) ==
+		  Base.summarysize(first(Falcons._plan_data(short, Galactic, :all)))
 	default = Falcons._CHUNK_SAMPLES[]
 	try
 		for len in (1, 2, 7, 64)
@@ -148,15 +148,33 @@ end
 			h = make_h_maps(obs; nside = 16, n_m_couples = [(0, 0), (2, 0), (2, 4)])
 			@test h.hits == ref_h.hits
 			@test h.h == ref_h.h
-			blk = Falcons._anchor_block(Falcons._pointing_plan(obs, Galactic, :all), 1, len)
-			@test size(blk.quats, 1) <= cld(len, 6) + 2  # 6 samples per anchor interval
+			blk = Falcons._anchor_block(first(Falcons._plan_data(obs, Galactic, :all)), 1, len)
+			@test size(blk.anchors, 1) <= cld(len, 6) + 2  # 6 samples per anchor interval
 			# Samples sparser than the anchors (one sample every 4 anchors).
 			sparse = Observation(scan, inst, DetectorInfo(name = "s", sampling_rate_hz = 0.125); start_time_s = 100.0,
 				duration_s = 4000.0, delta_time_s = 2.0)
-			plan = Falcons._pointing_plan(sparse, Galactic, :all)
-			@test size(Falcons._anchor_block(plan, 1, Falcons._block_length(plan)).quats, 1) <= len + 4
+			plan = first(Falcons._plan_data(sparse, Galactic, :all))
+			@test size(Falcons._anchor_block(plan, 1, Falcons._block_length(plan, sparse.n_samples)).anchors, 1) <= len + 4
 		end
 	finally
 		Falcons._CHUNK_SAMPLES[] = default
 	end
+end
+
+@testset "non-finite inputs are rejected" begin
+	for (name, obs) in nonfinite_observations()
+		@testset "$name" begin
+			@test_throws ArgumentError get_pointings(obs)
+			@test_throws ArgumentError get_pointing_pixels(obs; nside = 8)
+			@test_throws ArgumentError get_hitmap(obs; nside = 8)
+			@test_throws ArgumentError make_h_maps(obs; nside = 8)
+		end
+	end
+	# Backstop inside the loops, for a plan corrupted after the checks.
+	scan, inst = satellite_preset(:LiteBIRD)
+	obs = Observation(scan, inst, DetectorInfo(name = "a", sampling_rate_hz = 1.0); start_time_s = 0.0, duration_s = 10.0)
+	plan, _ = Falcons._plan_data(obs, Galactic, :all)
+	plan.dets.constant[1] = Quaternion(NaN, 0.0, 0.0, 1.0)
+	@test_throws ArgumentError Falcons._cpu_pointing_pixels(plan, obs.n_samples, 1, Resolution(8), false)
+	@test_throws ArgumentError Falcons._foreach_chunk((_...) -> nothing, plan, obs.n_samples, 1, Resolution(8), false)
 end

@@ -30,6 +30,7 @@ using StaticArrays
 import TOML
 
 include("quaternions.jl")
+include("healpix.jl")
 include("coordinates.jl")
 include("units.jl")
 include("imo.jl")
@@ -71,6 +72,7 @@ export Observation, split_observation, get_times, get_time_span, n_detectors
 
 # pointings.jl
 export get_pointings, get_pointing_pixels, PointingPixels, get_hitmap
+export AbstractBackend, CPUBackend, GPUBackend
 
 # h_maps.jl
 export make_h_maps, HMapsResult, h_map, hitmap, nm_grid, save_h_maps, load_h_maps_from_file

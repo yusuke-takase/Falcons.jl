@@ -95,7 +95,7 @@ end
 
 """
     make_h_maps(observations; nside, n_m_couples = [(0, 0), (2, 0), (4, 0)],
-                output_coordinate_system = Galactic) -> HMapsResult
+                output_coordinate_system = Galactic, backend = CPUBackend()) -> HMapsResult
 
 h-maps of every detector, as `make_h_maps` in litebird_sim (see
 [`HMapsResult`](@ref)). `observations` is an [`Observation`](@ref) or a vector
@@ -108,8 +108,10 @@ Pointings are computed in chunks and never stored in full.
 make_h_maps(obs::Observation; kw...) = make_h_maps([obs]; kw...)
 
 function make_h_maps(observations::AbstractVector{<:Observation}; nside::Integer,
-	n_m_couples = [(0, 0), (2, 0), (4, 0)], output_coordinate_system::CoordinateSystem = Galactic)
+	n_m_couples = [(0, 0), (2, 0), (4, 0)], output_coordinate_system::CoordinateSystem = Galactic,
+	backend::AbstractBackend = CPUBackend())
 	isempty(observations) && throw(ArgumentError("no observations given"))
+	backend isa GPUBackend && _require_gpu()
 	couples = _normalize_couples(n_m_couples)
 	rates = unique(obs.sampling_rate_hz for obs in observations)
 	length(rates) == 1 || throw(ArgumentError("all observations must have the same sampling rate, got $(rates) Hz"))
@@ -127,12 +129,17 @@ function make_h_maps(observations::AbstractVector{<:Observation}; nside::Integer
 	hits = zeros(Int, npix, length(names))
 
 	for obs in observations
-		plan = _pointing_plan(obs, output_coordinate_system, :all)
+		plan, _ = _plan_data(obs, output_coordinate_system, :all)
 		columns = Int[something(findfirst(==(det.name), names)) for det in obs.detectors]
-		χ = zeros(_block_length(plan))
-		_foreach_chunk(plan, resol, false) do first, pixels, psi
+		if backend isa GPUBackend
+			_gpu_h_maps!(sums, hits, plan, obs.n_samples, columns, spin_n, spin_m, resol, backend)
+			continue
+		end
+		χ = zeros(_block_length(plan, obs.n_samples))
+		_foreach_chunk(plan, obs.n_samples, length(columns), resol, false) do first, pixels, psi
 			for j in axes(pixels, 1)
-				χ[j] = _hwp_angle_at(obs, first + j - 1)
+				χ[j] = _hwp_at(plan, first + j - 1)
+				isfinite(χ[j]) || throw(ArgumentError(_NONFINITE_ANGLES))
 			end
 			@inbounds for (n, col) in enumerate(columns), j in axes(pixels, 1)
 				p = pixels[j, n]
