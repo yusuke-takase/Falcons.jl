@@ -42,6 +42,34 @@ end
 	@test_throws ArgumentError query(imo, "$MOCK_REL/MOCKFT/no_such_quantity")
 	@test_throws ArgumentError query(imo, "/releases/vMOCK2")
 	@test_throws ArgumentError query(imo, "00000000-0000-0000-0000-000000000000")
+	q = query(imo, "/data_files/$(df.uuid)")
+	fmt = query(imo, "/format_specs/$(imo.quantities[q.quantity].format_spec)")
+	@test fmt isa Falcons.FormatSpecification
+	@test (fmt.document_ref, fmt.title, fmt.file_mime_type) == ("MOCK-0", "mock", "application/json")
+	@test fmt.local_doc_file_path === nothing
+	@test_throws ArgumentError query(imo, "/format_specs/00000000-0000-0000-0000-000000000000")
+end
+
+@testset "several versions in one release" begin
+	u(i) = "00000000-0000-0000-0000-00000000000$i"
+	version(i, date) = Dict("uuid" => u(i), "name" => "q", "upload_date" => date, "metadata" => Dict("v" => i), "quantity" => u(2))
+	function write_imo(dir, files)
+		schema = Dict("entities" => [Dict("uuid" => u(1), "name" => "sat")],
+			"quantities" => [Dict("uuid" => u(2), "name" => "q", "entity" => u(1))],
+			"data_files" => files,
+			"releases" => [Dict("tag" => "r", "data_files" => [f["uuid"] for f in files])])
+		write(joinpath(dir, "schema.json"), Falcons.JSON.json(schema))
+		return Imo(dir)
+	end
+	mktempdir() do dir
+		files = [version(3, "2026-01-01T00:00:00+00:00"), version(4, "2026-03-01T00:00:00.5+00:00"),
+			version(5, "2026-03-01T00:00:00+00:00")]
+		v = write_imo(dir, files)
+		@test query(v, "/releases/r/sat/q").metadata["v"] == 4  # the latest upload
+		@test query(v, u(3)).metadata["v"] == 3                  # any version by UUID
+		v = write_imo(dir, [files; version(6, "2026-03-01T00:00:00.5+00:00")])
+		@test_throws ArgumentError query(v, "/releases/r/sat/q")  # two latest versions
+	end
 end
 
 h5open(LBS_REF) do f
@@ -128,11 +156,36 @@ end
 	@test FreqChannelInfo(bandcenter_ghz = 40.0, number_of_detectors = 2).detector_names == ["det0", "det1"]
 	@test_throws ArgumentError FreqChannelInfo(bandcenter_ghz = 40.0, number_of_detectors = 2, detector_names = ["a"])
 	@test InstrumentInfo(Dict{String, Any}()).name == "mock-instrument"
+	# Differences from litebird_sim's from_dict (documented): the channel name
+	# follows the band centre and detector names are generated.
+	@test FreqChannelInfo(Dict{String, Any}("bandcenter_ghz" => 140.0)).channel == "140.0 GHz"
+	@test FreqChannelInfo(Dict{String, Any}("bandcenter_ghz" => 40.0, "number_of_detectors" => 2)).detector_names ==
+		  ["det0", "det1"]
+end
+
+@testset "null values" begin
+	meta = Falcons.JSON.parse("""{"name": "x", "fwhm_arcmin": null, "pixel": null, "net_ukrts": 3.0, "pol": null}""")
+	det = DetectorInfo(meta)
+	@test (det.name, det.fwhm_arcmin, det.pixel, det.net_ukrts, det.pol) == ("x", 0.0, nothing, 3.0, nothing)
+	@test_throws ArgumentError DetectorInfo(Dict{String, Any}("name" => "x", "quat" => nothing))
+	ch = FreqChannelInfo(Falcons.JSON.parse("""{"bandcenter_ghz": 100.0, "channel": null, "net_detector_ukrts": null,
+		"number_of_detectors": 2, "fmin_hz": null}"""))
+	@test (ch.channel, ch.net_detector_ukrts, ch.fmin_hz, ch.number_of_detectors) == ("100.0 GHz", 0.0, 1e-5, 2)
+	inst = InstrumentInfo(Falcons.JSON.parse("""{"name": null, "spin_boresight_angle_deg": null, "spin_rotangle_deg": 90}"""))
+	@test (inst.name, inst.spin_boresight_angle_rad, inst.spin_rotangle_rad) == ("mock-instrument", 0.0, π / 2)
+	over = only(detector_list_from_parameters(nothing, [Dict("name" => "p", "sampling_rate_hz" => 5.0, "fwhm_arcmin" => nothing)]))
+	@test (over.name, over.fwhm_arcmin) == ("p", 0.0)
 end
 
 @testset "detector_list_from_parameters" begin
 	ch_url = "$MOCK_REL/MOCKFT/M-100/channel_info"
 	@test length(detector_list_from_parameters(imo, [Dict("channel_info_obj" => ch_url, "num_of_detectors_from_channel" => 2)])) == 2
+	# More detectors than the channel has: all of them, as litebird_sim.
+	@test [d.name for d in detector_list_from_parameters(imo, [Dict("channel_info_obj" => ch_url,
+		"num_of_detectors_from_channel" => 10)])] == ["M100_00_A", "M100_00_B", "M100_01_A"]
+	@test isempty(detector_list_from_parameters(imo, [Dict("channel_info_obj" => ch_url, "num_of_detectors_from_channel" => 0)]))
+	@test_throws ArgumentError detector_list_from_parameters(imo, [Dict("channel_info_obj" => ch_url,
+		"num_of_detectors_from_channel" => -1)])
 	bore = only(detector_list_from_parameters(imo, [Dict("channel_info_obj" => ch_url, "use_only_one_boresight_detector" => true,
 		"detector_name" => "bore")]))
 	@test bore.name == "bore"

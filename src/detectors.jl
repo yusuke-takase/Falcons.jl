@@ -219,7 +219,10 @@ function _quat_from_metadata(q)
 end
 
 function _detector_field(name::Symbol, value)
-	name === :quat && return _quat_from_metadata(value)
+	if name === :quat
+		value === nothing && throw(ArgumentError("the detector quaternion is null"))
+		return _quat_from_metadata(value)
+	end
 	name in (:pixel, :squid) && return _opt_int(value)
 	name in (:wafer, :pixtype, :channel, :pol, :orient) && return _opt_string(value)
 	name === :name && return string(value)
@@ -236,25 +239,32 @@ Detector parameters from a dictionary (e.g. the metadata of an IMO
 litebird_sim. Keys that are not fields are ignored. `quat` may be a list of 4
 numbers or a dictionary with `start_time` (s), `sampling_rate_hz` and `quats`
 for a time-dependent rotation. Unlike litebird_sim, `pixel` and `squid` are
-converted to integers and no default bandpass is synthesised.
+converted to integers, no default bandpass is synthesised, and a `null` value
+(`nothing`) is treated as a missing key, so that the field keeps its default;
+a `null` quaternion throws an `ArgumentError`.
 """
 function DetectorInfo(metadata::AbstractDict)
 	kw = Dict{Symbol, Any}()
+	_set_detector_fields!(kw, metadata)
+	return DetectorInfo(; kw...)
+end
+
+function _set_detector_fields!(kw::AbstractDict, metadata::AbstractDict)
 	for f in fieldnames(DetectorInfo)
 		key = string(f)
-		haskey(metadata, key) && (kw[f] = _detector_field(f, metadata[key]))
+		haskey(metadata, key) || continue
+		value = metadata[key]
+		value === nothing && f !== :quat && continue
+		kw[f] = _detector_field(f, value)
 	end
-	return DetectorInfo(; kw...)
+	return kw
 end
 
 DetectorInfo(imo::Imo, url::AbstractString) = DetectorInfo(_metadata(imo, url))
 
 function _with_fields(det::DetectorInfo, overrides::AbstractDict)
 	kw = Dict{Symbol, Any}(f => getfield(det, f) for f in fieldnames(DetectorInfo))
-	for f in fieldnames(DetectorInfo)
-		key = string(f)
-		haskey(overrides, key) && (kw[f] = _detector_field(f, overrides[key]))
-	end
+	_set_detector_fields!(kw, overrides)
 	return DetectorInfo(; kw...)
 end
 
@@ -263,7 +273,13 @@ end
     FreqChannelInfo(imo::Imo, url)
 
 Channel parameters from a dictionary or an IMO `channel_info` data file, as
-`FreqChannelInfo.from_dict` / `from_imo` in litebird_sim.
+`FreqChannelInfo.from_dict` / `from_imo` in litebird_sim, with two
+differences. The post-initialisation of the keyword constructor is applied
+once, to the values of the dictionary: a missing `channel` becomes
+`"<bandcenter_ghz> GHz"` (litebird_sim's `from_dict` gives `"0.0 GHz"`) and
+missing `detector_names` are generated (litebird_sim's `from_dict` fails
+unless the channel has a single detector). A `null` value (`nothing`) is
+treated as a missing key.
 """
 function FreqChannelInfo(metadata::AbstractDict)
 	kw = Dict{Symbol, Any}(:bandcenter_ghz => 0.0)
@@ -271,6 +287,7 @@ function FreqChannelInfo(metadata::AbstractDict)
 		key = string(f)
 		haskey(metadata, key) || continue
 		v = metadata[key]
+		v === nothing && continue
 		kw[f] = f === :channel ? _opt_string(v) :
 				f === :number_of_detectors ? Int(v) :
 				f in (:detector_names, :detector_objs) ? String.(v) :
@@ -288,20 +305,22 @@ FreqChannelInfo(imo::Imo, url::AbstractString) = FreqChannelInfo(_metadata(imo, 
 Instrument geometry from a dictionary or an IMO `instrument_info` data file,
 as `InstrumentInfo.from_dict` / `from_imo` in litebird_sim: the angles are read
 from `boresight_rotangle_deg`, `spin_boresight_angle_deg` and
-`spin_rotangle_deg`, the wafers from `wafers` and `waferspace`.
+`spin_rotangle_deg`, the wafers from `wafers` and `waferspace`. A `null` value
+(`nothing`) is treated as a missing key.
 """
 function InstrumentInfo(d::AbstractDict)
+	get_value(key, default) = something(get(d, key, nothing), default)
 	return InstrumentInfo(
-		name = string(get(d, "name", "mock-instrument")),
-		boresight_rotangle_rad = deg2rad(Float64(get(d, "boresight_rotangle_deg", 0.0))),
-		spin_boresight_angle_rad = deg2rad(Float64(get(d, "spin_boresight_angle_deg", 0.0))),
-		spin_rotangle_rad = deg2rad(Float64(get(d, "spin_rotangle_deg", 0.0))),
-		hwp_rpm = Float64(get(d, "hwp_rpm", 0.0)),
-		number_of_channels = Int(get(d, "number_of_channels", 0)),
-		channel_names = String.(get(d, "channel_names", String[])),
-		channel_objs = url_to_uuid.(String.(get(d, "channel_objs", String[]))),
-		wafer_names = String.(get(d, "wafers", String[])),
-		wafer_space_cm = Float64(get(d, "waferspace", 0.0)),
+		name = string(get_value("name", "mock-instrument")),
+		boresight_rotangle_rad = deg2rad(Float64(get_value("boresight_rotangle_deg", 0.0))),
+		spin_boresight_angle_rad = deg2rad(Float64(get_value("spin_boresight_angle_deg", 0.0))),
+		spin_rotangle_rad = deg2rad(Float64(get_value("spin_rotangle_deg", 0.0))),
+		hwp_rpm = Float64(get_value("hwp_rpm", 0.0)),
+		number_of_channels = Int(get_value("number_of_channels", 0)),
+		channel_names = String.(get_value("channel_names", String[])),
+		channel_objs = url_to_uuid.(String.(get_value("channel_objs", String[]))),
+		wafer_names = String.(get_value("wafers", String[])),
+		wafer_space_cm = Float64(get_value("waferspace", 0.0)),
 	)
 end
 
@@ -315,8 +334,10 @@ a parameter file, as `detector_list_from_parameters` in litebird_sim. Each
 entry is one of
 
 - `channel_info_obj = url`: the detectors of a channel, optionally only the
-  first `num_of_detectors_from_channel`, or a single boresight detector named
-  `detector_name` when `use_only_one_boresight_detector = true`;
+  first `num_of_detectors_from_channel` (all of them if the channel has fewer,
+  as in litebird_sim; a negative number throws an `ArgumentError`), or a single
+  boresight detector named `detector_name` when
+  `use_only_one_boresight_detector = true`;
 - `detector_info_obj = url`: one detector from the IMO;
 - neither: a default `DetectorInfo`.
 
@@ -335,7 +356,8 @@ function detector_list_from_parameters(imo::Union{Nothing, Imo}, definitions::Ab
 				continue
 			end
 			n = get(def, "num_of_detectors_from_channel", ch.number_of_detectors)
-			append!(result, [DetectorInfo(imo, uuid) for uuid in ch.detector_objs[1:n]])
+			n >= 0 || throw(ArgumentError("num_of_detectors_from_channel must be ≥ 0, got $n"))
+			append!(result, [DetectorInfo(imo, uuid) for uuid in ch.detector_objs[1:min(n, end)]])
 			continue
 		end
 		det = if haskey(def, "detector_info_obj")

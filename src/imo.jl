@@ -45,6 +45,22 @@ struct DataFile
 end
 
 """
+    FormatSpecification
+
+A format specification of the IMO: `uuid`, `document_ref`, `title`,
+`local_doc_file_path` (or `nothing`), `doc_mime_type` and `file_mime_type`,
+as in libinsdb.
+"""
+struct FormatSpecification
+	uuid::String
+	document_ref::String
+	title::String
+	local_doc_file_path::Union{Nothing, String}
+	doc_mime_type::String
+	file_mime_type::String
+end
+
+"""
     Release
 
 A tagged release of the IMO: `tag`, `release_date`, `comment` and the UUIDs of
@@ -76,6 +92,7 @@ struct Imo
 	quantities::Dict{String, Quantity}
 	data_files::Dict{String, DataFile}
 	releases::Dict{String, Release}
+	format_specs::Dict{String, FormatSpecification}
 end
 
 function _schema_path(location::AbstractString)
@@ -112,6 +129,15 @@ function Imo(flatfile_location::AbstractString)
 	entities = _walk_entities!(Dict{String, Entity}(), get(schema, "entities", []), "", nothing)
 	path_to_entity = Dict(e.full_path => uuid for (uuid, e) in entities)
 
+	format_specs = Dict{String, FormatSpecification}()
+	for obj in get(schema, "format_specifications", [])
+		uuid = _uuid_string(obj["uuid"])
+		doc = get(obj, "doc_file_name", nothing)
+		format_specs[uuid] = FormatSpecification(uuid, string(something(get(obj, "document_ref", nothing), "")),
+			string(something(get(obj, "title", nothing), "")), doc === nothing || isempty(doc) ? nothing : string(doc),
+			string(something(get(obj, "doc_mime_type", nothing), "")), string(something(get(obj, "file_mime_type", nothing), "")))
+	end
+
 	quantities = Dict{String, Quantity}()
 	for obj in get(schema, "quantities", [])
 		uuid = _uuid_string(obj["uuid"])
@@ -140,7 +166,7 @@ function Imo(flatfile_location::AbstractString)
 			string(get(obj, "upload_date", "")), string(get(obj, "spec_version", "")), get(tags_of, uuid, String[]))
 		push!(quantities[data_files[uuid].quantity].data_files, uuid)
 	end
-	return Imo(path, entities, path_to_entity, quantities, data_files, releases)
+	return Imo(path, entities, path_to_entity, quantities, data_files, releases, format_specs)
 end
 
 function Base.show(io::IO, imo::Imo)
@@ -160,21 +186,26 @@ function _data_file(imo::Imo, uuid::AbstractString)
 end
 
 """
-    query(imo, identifier) -> DataFile | Quantity | Entity
+    query(imo, identifier) -> DataFile | Quantity | Entity | FormatSpecification
 
 Look up an object of the IMO, as `Imo.query` in litebird_sim. `identifier` is
 
 - a UUID string, or `"/data_files/<uuid>"`: a data file;
-- `"/quantities/<uuid>"` or `"/entities/<uuid>"`: a quantity or an entity;
+- `"/quantities/<uuid>"`, `"/entities/<uuid>"` or `"/format_specs/<uuid>"`: a
+  quantity, an entity or a format specification;
 - a release path `"/releases/<tag>/<entity>/…/<quantity>"` (the `/releases`
   prefix is optional): the data file of that quantity included in the release.
-  If the release contains several versions, the most recently uploaded one is
-  returned.
+
+If a release contains several versions of the quantity, the one with the
+latest `upload_date` is returned (the dates are compared as ISO 8601
+strings, so they must share the same format), and equal dates throw an
+`ArgumentError`. litebird_sim (libinsdb) returns any one of them instead.
 """
 function query(imo::Imo, identifier::AbstractString)
 	id = String(identifier)
 	occursin(_UUID_RE, id) && return _data_file(imo, id)
-	for (prefix, table) in (("/data_files/", imo.data_files), ("/quantities/", imo.quantities), ("/entities/", imo.entities))
+	for (prefix, table) in (("/data_files/", imo.data_files), ("/quantities/", imo.quantities), ("/entities/", imo.entities),
+		("/format_specs/", imo.format_specs))
 		if startswith(id, prefix)
 			uuid = url_to_uuid(id)
 			haskey(table, uuid) || throw(ArgumentError("$identifier not found in the IMO"))
@@ -192,7 +223,11 @@ function query(imo::Imo, identifier::AbstractString)
 	release = imo.releases[tag]
 	candidates = [imo.data_files[u] for u in imo.quantities[entity.quantities[qi]].data_files if u in release.data_files]
 	isempty(candidates) && throw(ArgumentError("quantity \"$entity_path/$quantity_name\" has no data file in release \"$tag\""))
-	return candidates[argmax([c.upload_date for c in candidates])]
+	latest = maximum(c.upload_date for c in candidates)
+	newest = filter(c -> c.upload_date == latest, candidates)
+	length(newest) == 1 || throw(ArgumentError("release \"$tag\" holds $(length(newest)) versions of " *
+		"\"$entity_path/$quantity_name\" uploaded at $latest; query one of them by UUID: $(join(sort([c.uuid for c in newest]), ", "))"))
+	return only(newest)
 end
 
 _metadata(imo::Imo, url::AbstractString) = query(imo, url).metadata
