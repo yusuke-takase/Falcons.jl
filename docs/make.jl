@@ -20,3 +20,14 @@ makedocs(;
 	],
 	checkdocs = :exports,
 )
+
+# Deployed only by the manual run of the "Documentation" workflow with "deploy" checked
+# (.github/workflows/docs.yml); pushes and pull requests build without deploying.
+if get(ENV, "FALCONS_DEPLOY_DOCS", "false") == "true"
+	deploydocs(;
+		repo = "github.com/yusuke-takase/Falcons.jl.git",
+		devbranch = "master",
+		devurl = "dev",
+		push_preview = false,
+	)
+end

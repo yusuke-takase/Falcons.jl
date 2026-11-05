@@ -5,6 +5,20 @@ on:
     branches:
       - master
   pull_request:
+  # Manual run (with "Use workflow from" set to master). It builds the documentation and uploads it
+  # as the artifact "docs-html"; with "deploy" checked it also deploys it to the gh-pages branch:
+  # master to dev/, or, with "release_tag" set, the documentation of that release tag to vX.Y.Z/
+  # (stable then points to the latest release).
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: "Deploy to the gh-pages branch (otherwise only build and upload the artifact)"
+        type: boolean
+        default: false
+      release_tag:
+        description: "Release tag to build instead of master, e.g. v1.0.1 (empty: master, deployed to dev/)"
+        type: string
+        default: ""
 
 jobs:
   docs:
@@ -12,14 +26,78 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - name: Check the release tag
+        if: github.event_name == 'workflow_dispatch' && inputs.release_tag != ''
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "invalid release tag: $RELEASE_TAG"; exit 1; }
+      - uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v4
+        with:
+          ref: ${{ inputs.release_tag }}
+          persist-credentials: false
       - name: Set up Julia
-        uses: julia-actions/setup-julia@v2
+        uses: julia-actions/setup-julia@4c0cb0fce8556fdb04a90347310e5db8b1f98fb9 # v2
         with:
           version: "1"
       - name: Cache artifacts
-        uses: julia-actions/cache@v2
+        uses: julia-actions/cache@d10a6fd8f31b12404a54613ebad242900567f2b9 # v2
       - name: Install dependencies
-        run: julia --project=docs -e 'using Pkg; Pkg.develop(PackageSpec(path = pwd())); Pkg.instantiate()'
+        run: |
+          rm -f docs/Manifest.toml
+          julia --project=docs -e '
+            using Pkg
+            Pkg.develop(PackageSpec(path = pwd()))
+            # The documentation of the releases up to v1.0.1 has no [compat] and was written for
+            # Documenter 0.27 (Documenter 1 turns its missing docstrings into an error).
+            haskey(Pkg.TOML.parsefile("docs/Project.toml"), "compat") || Pkg.add(name = "Documenter", version = "0.27")
+            Pkg.instantiate()'
       - name: Build (no deployment)
         run: julia --project=docs docs/make.jl
+      - name: Upload the site
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: docs-html
+          path: docs/build
+          retention-days: 7
+
+  deploy:
+    name: Deploy to gh-pages
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy && github.ref == 'refs/heads/master'
+    needs: docs
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    concurrency:
+      group: gh-pages
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v4
+        with:
+          ref: ${{ inputs.release_tag }}
+          persist-credentials: false
+      - name: Set up Julia
+        uses: julia-actions/setup-julia@4c0cb0fce8556fdb04a90347310e5db8b1f98fb9 # v2
+        with:
+          version: "1"
+      - name: Install dependencies
+        run: |
+          rm -f docs/Manifest.toml
+          julia --project=docs -e '
+            using Pkg
+            Pkg.develop(PackageSpec(path = pwd()))
+            # The documentation of the releases up to v1.0.1 has no [compat] and was written for
+            # Documenter 0.27 (Documenter 1 turns its missing docstrings into an error).
+            haskey(Pkg.TOML.parsefile("docs/Project.toml"), "compat") || Pkg.add(name = "Documenter", version = "0.27")
+            Pkg.instantiate()'
+      - name: Build and deploy
+        env:
+          FALCONS_DEPLOY_DOCS: "true"
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          # Documenter deploys a build of refs/tags/vX.Y.Z to vX.Y.Z/ and a build of master to dev/.
+          if [ -n "$RELEASE_TAG" ]; then export GITHUB_REF="refs/tags/$RELEASE_TAG"; fi
+          julia --project=docs docs/make.jl
