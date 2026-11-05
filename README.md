@@ -4,6 +4,8 @@
 
 This logo was created with the help of our dear collaborator Jonathan Aumont.
 
+[![Documentation (stable)](https://img.shields.io/badge/docs-stable-blue.svg)](https://yusuke-takase.github.io/Falcons.jl/stable/)
+[![Documentation (dev)](https://img.shields.io/badge/docs-dev-blue.svg)](https://yusuke-takase.github.io/Falcons.jl/dev/)
 ![Build Status](https://github.com/yusuke-takase/Falcons.jl/actions/workflows/test.yml/badge.svg?branch=master)
 
 Welcome to Falcons (Framework for Astrophysical Locus Computing ON the Sky).
