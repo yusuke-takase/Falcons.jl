@@ -4,8 +4,6 @@
 
 This logo was created with the help of our dear collaborator Jonathan Aumont.
 
-[![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://yusuke-takase.github.io/Falcons.jl/stable)
-[![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://yusuke-takase.github.io/Falcons.jl/dev)
 ![Build Status](https://github.com/yusuke-takase/Falcons.jl/actions/workflows/test.yml/badge.svg?branch=master)
 
 Welcome to Falcons(Framework for Astrophysical Locus Computing ON the Sky).
@@ -49,7 +47,7 @@ In this example, you will use 4 threads. You can change the number of threads ac
 ## Usage example
 
 See the tutorial [here](https://github.com/yusuke-takase/Falcons.jl/tree/master/tutorial) for details on how to use it.
-Refer to the [documentation](https://yusuke-takase.github.io/Falcons.jl/dev/) for more examples.
+The documentation sources are in [docs/](docs/); build them with `julia --project=docs docs/make.jl`.
 
 ## How to cite the code
 If you use this software, please cite [Y. Takase et al, 2024, JCAP](https://iopscience.iop.org/article/10.1088/1475-7516/2024/12/036) for your publication. 

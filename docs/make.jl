@@ -16,10 +16,5 @@ makedocs(;
     pages=[
         "Home" => "index.md",
         "Scanning" => "Scanning.md",
-        #"Mapmake" => "Mapmake.md",
     ],
-)
-
-deploydocs(;
-    repo="github.com/yusuke-takase/Falcons.jl",
 )
