@@ -10,6 +10,9 @@ This version follows litebird_sim's conventions and names, which changes both th
   former `gamma`, `start_point` and name-dependent IMO rules are gone.
 - The Ecliptic-to-Galactic rotation uses litebird_sim's values (they differ from the former ones by up to
   1e-7).
+- Hit maps, pixel indices and h-maps are in Galactic coordinates by default, as in litebird_sim; the former
+  default was Ecliptic (`coord = "E"`). Pass `output_coordinate_system = Ecliptic` for the former frame.
+  Pointings (`get_pointings`) are still Ecliptic by default.
 
 ## Names
 

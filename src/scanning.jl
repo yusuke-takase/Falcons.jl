@@ -102,7 +102,7 @@ end
 
 # name => (α deg, β deg, precession period min, spin period min)
 const SATELLITE_PRESETS = (
-	WMAP = (70.0, 22.5, 60.0, 129 / 60),
+	WMAP = (22.5, 70.0, 60.0, 129 / 60),  # spin axis 22.5° from the Sun line, boresight 70° from it
 	Planck = (7.5, 85.0, 24 * 60 * (365.25 / 2), 1.0),
 	PICO = (26.0, 69.0, 10 * 60.0, 1.0),
 	CORE = (30.0, 65.0, 4 * 24 * 60.0, 2.0),

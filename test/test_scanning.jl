@@ -46,6 +46,9 @@ end
 	@test scan.spin_rate_hz ≈ 0.05 / 60
 	@test inst.spin_boresight_angle_rad ≈ deg2rad(50)
 	@test :Planck in satellite_presets()
+	wmap, wmap_inst = satellite_preset(:WMAP)  # 22.5° precession cone, boresight 70° from the spin axis
+	@test wmap.spin_sun_angle_rad ≈ deg2rad(22.5)
+	@test wmap_inst.spin_boresight_angle_rad ≈ deg2rad(70)
 	@test_throws ArgumentError satellite_preset(:Unknown)
 end
 

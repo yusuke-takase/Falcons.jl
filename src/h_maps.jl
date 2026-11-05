@@ -15,7 +15,8 @@ Fields:
 - `detectors`: detector names, in the order of the last axis of `h`.
 - `hits`: `(n_pixels, n_detectors)` hit counts, or `nothing` when read from a
   file without the `(0, 0)` couple.
-- `nside`, `coordinate_system`, `duration_s` (total observed time),
+- `nside`, `coordinate_system`, `duration_s` (the sum of the time spans of the
+  observations; one value for all the detectors, as in litebird_sim),
   `sampling_rate_hz`, `detector_split` and `time_split` (always `"full"`).
 
 Use [`h_map`](@ref) and [`hitmap`](@ref) to access a single map.
@@ -172,7 +173,9 @@ Write one HDF5 file per detector, `h_maps_det_<name>.h5`, in the layout used by
 `save_h_maps` in litebird_sim: root attributes `coordinate_system`, `det`,
 `detector_split`, `time_split`, `duration_s` and `sampling_rate_Hz`, and one
 group `"n,m"` per couple holding the datasets `Re` and `Im` (RING ordering).
-Returns the paths of the files written.
+The `(0, 0)` group holds the hit counts, and is written also when `(0, 0)` is
+not among the couples (SBM and the map-makers need the hits). Returns the paths
+of the files written.
 
 The string attributes are scalar variable-length UTF-8 strings, as written by
 h5py, so that litebird_sim reads them as `str`.
@@ -193,6 +196,10 @@ function save_h_maps(res::HMapsResult, output_directory::AbstractString)
 			for (c, (n, m)) in enumerate(res.n_m_couples)
 				f["$n,$m/Re"] = real.(res.h[c, :, d])
 				f["$n,$m/Im"] = imag.(res.h[c, :, d])
+			end
+			if (0, 0) ∉ res.n_m_couples && res.hits !== nothing
+				f["0,0/Re"] = Float64.(res.hits[:, d])
+				f["0,0/Im"] = zeros(size(res.hits, 1))
 			end
 		end
 		push!(paths, path)

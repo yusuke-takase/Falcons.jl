@@ -72,6 +72,11 @@ end
 	@test_throws ArgumentError make_h_maps(obs_h; nside = 8, n_m_couples = [(2, 0), (2, 0)])
 	res = make_h_maps(obs_h; nside = 8, n_m_couples = [(2, 0)])
 	@test sum(hitmap(res, "a")) == obs_h.n_samples  # hit counts are kept without (0, 0)
+	mktempdir() do dir  # and written to the files
+		back = load_h_maps_from_file(save_h_maps(res, dir)[1])
+		@test hitmap(back, "a") == hitmap(res, "a")
+		@test h_map(back, "a", 2, 0) == h_map(res, "a", 2, 0)
+	end
 end
 
 @testset "save and load (litebird_sim layout)" begin
