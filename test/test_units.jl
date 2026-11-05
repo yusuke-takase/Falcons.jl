@@ -10,3 +10,8 @@
 	@test rpm2angfreq(60.0) ≈ 2π
 	@test arcmin2rad(60.0) ≈ deg2rad(1.0)
 end
+
+@testset "unknown units" begin
+	@test_throws ArgumentError rpm2period(1.0; unit = "day")
+	@test_throws ArgumentError period2rpm(1.0; unit = "day")
+end

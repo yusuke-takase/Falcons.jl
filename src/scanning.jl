@@ -18,7 +18,7 @@ The spin-to-Ecliptic rotation at the absolute time `t` (s) is
 
     Rz(Ω t) · Rx(2π f_prec t) · Ry(π/2 − α) · Rz(2π f_spin t)
 
-with Ω = [`YEARLY_OMEGA_SPIN_HZ`](@ref); see [`spin_to_ecliptic`](@ref).
+with Ω = `Falcons.YEARLY_OMEGA_SPIN_HZ`; see [`spin_to_ecliptic`](@ref).
 """
 Base.@kwdef struct SpinningScanningStrategy
 	spin_sun_angle_rad::Float64

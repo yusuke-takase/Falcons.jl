@@ -6,6 +6,9 @@ Coordinate system of pointings and maps: `Ecliptic` or `Galactic`, as
 """
 @enum CoordinateSystem Ecliptic Galactic
 
+@doc "Ecliptic coordinates (`BarycentricMeanEcliptic` in astropy), the default of `get_pointings`." Ecliptic
+@doc "Galactic coordinates, the default of `get_hitmap`, `get_pointing_pixels` and `make_h_maps`." Galactic
+
 """
 Rotation matrix from Ecliptic to Galactic coordinates, `v_gal =
 ECL_TO_GAL_ROT_MATRIX * v_ecl`. Same values as litebird_sim, which computes the
