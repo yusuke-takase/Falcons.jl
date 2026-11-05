@@ -1,2 +1,5 @@
 /Manifest.toml
 /docs/build/
+.ipynb_checkpoints/
+/docs/Manifest.toml
+/test/gpu/Manifest.toml

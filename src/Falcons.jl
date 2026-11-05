@@ -1,68 +1,83 @@
+"""
+    Falcons
+
+Fast pointing, hit-map and h-map (spin-moment) computation for spinning CMB
+satellites, with the conventions, types and names of litebird_sim.
+
+Main entry points:
+
+- Scan description: [`SpinningScanningStrategy`](@ref), [`InstrumentInfo`](@ref),
+  [`DetectorInfo`](@ref), [`IdealHWP`](@ref), [`Observation`](@ref),
+  [`satellite_preset`](@ref), [`detector_quat`](@ref), [`split_observation`](@ref).
+- Rotations: [`Quaternion`](@ref), [`RotQuaternion`](@ref) (constant or sampled
+  in time, e.g. an external attitude), [`quat_rotation`](@ref).
+- Pointings: [`get_pointings`](@ref), [`get_pointing_pixels`](@ref), [`get_hitmap`](@ref).
+- h-maps: [`make_h_maps`](@ref), [`HMapsResult`](@ref), [`save_h_maps`](@ref),
+  [`load_h_maps_from_file`](@ref).
+- Instrument database: [`Imo`](@ref), [`query`](@ref), `DetectorInfo(imo, url)` and
+  the other `(imo, url)` constructors, [`detector_list_from_parameters`](@ref).
+- Parameter files: [`run_h_maps_pipeline`](@ref).
+"""
 module Falcons
 
-using ReferenceFrameRotations
-using Healpix
-using LinearAlgebra
 using Base.Threads
-using StaticArrays
-using ProgressMeter
-using JSON
-using DataFrames
-using SkyCoords
-using Printf
-using Statistics
-using TOML
 using HDF5
-using Base.Filesystem
-using NaNStatistics
+using Healpix
+import JSON
+using LinearAlgebra
+using Printf
+using StaticArrays
+import TOML
 
-include("./function/scanning.jl")
-include("./function/imo.jl")
-include("./function/systematics.jl")
-include("./function/pointing_systematics.jl")
-include("./function/scanfields.jl")
-include("./function/coordinates.jl")
-include("./function/units.jl")
-include("./function/pipelines.jl")
+include("quaternions.jl")
+include("healpix.jl")
+include("coordinates.jl")
+include("units.jl")
+include("imo.jl")
+include("scanning.jl")
+include("detectors.jl")
+include("hwp.jl")
+include("observations.jl")
+include("pointings.jl")
+include("h_maps.jl")
+include("pipelines.jl")
 
-# scanning.jl
-export rotate_quat, show_ss
-export ScanningStrategy, pointings
-export gen_ScanningStrategy, get_satellite
-export get_pointings, get_pointing_pixels
-export angtod2hitmap, pixtod2hitmap, normarize!
-export ang_to_quat, get_pointings_arbitrary_dets
+# quaternions.jl
+export Quaternion, quat_rotation, quat_rotation_x, quat_rotation_y, quat_rotation_z, rotate_vector
+export RotQuaternion, slerp, is_constant, time_range
 
-# imo.jl
-export Imo, gen_imo
-export get_channel_list, get_channel_info, get_detectors
-export imo_telescope!, imo_channel!, imo_name!, get_instrument_info
-export get_pol_angle, imo2ecl_coordinates
-
-# systematics.jl
-export set_input, orientation_func, get_hn_map
-export get_psiDataBase, get_psi_time_DataBase
-export binned_mapmake
-export get_psi_database
-
-# pointing_systematics.jl
-export Offset, GlobalOffsetAngles, OffsetAngles
-export interp_signal, true_signal, tayler_expanded_signal
-export gen_signalfield
-export get_pointings_offset, sim_pointing_systematics
+# coordinates.jl
+export CoordinateSystem, Ecliptic, Galactic
+export rotate_coordinates_e2g!, rotate_vector_e2g!
 
 # units.jl
 export period2rpm, rpm2angfreq, rpm2period, arcmin2rad
-export convert_maps
 
-# scanfields.jl
-export scanfield, get_scanfield_step
-export h_nm, get_hnm_quantify, get_scanfield
+# scanning.jl
+export SpinningScanningStrategy, spin_to_ecliptic, orientation_angle, compute_pointing_and_orientation
+export satellite_preset, satellite_presets
 
-# coordinates.jl
-export _ang2galvec_one_sample, rotate_coordinates_e2g!, rotate_vec_ecl_to_gal_coordinates!, _rotate_coordinates_and_pol_e2g_for_one_sample
+# imo.jl
+export Imo, query, DataFile
+
+# detectors.jl
+export DetectorInfo, FreqChannelInfo, InstrumentInfo, bore2spin_quat, detector_quat
+export get_boresight_detector, detector_list_from_parameters
+
+# hwp.jl
+export IdealHWP, hwp_angle
+
+# observations.jl
+export Observation, split_observation, get_times, get_time_span, n_detectors
+
+# pointings.jl
+export get_pointings, get_pointing_pixels, PointingPixels, get_hitmap
+export AbstractBackend, CPUBackend, GPUBackend
+
+# h_maps.jl
+export make_h_maps, HMapsResult, h_map, hitmap, nm_grid, save_h_maps, load_h_maps_from_file
 
 # pipelines.jl
-export sim_det_scanfields, create_h5_file
+export run_h_maps_pipeline
 
 end
