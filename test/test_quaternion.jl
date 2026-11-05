@@ -28,6 +28,15 @@ end
 	@test isbitstype(Quaternion{Float64})
 end
 
+@testset "components are promoted to floating point" begin
+	@test Quaternion(0, 0, 0, 1) === Quaternion(0.0, 0.0, 0.0, 1.0)
+	@test Quaternion([0, 0, 0, 1]) === Quaternion(0.0, 0.0, 0.0, 1.0)
+	@test Quaternion(1.0f0, 0.5f0, 0.0f0, 1.0f0) isa Quaternion{Float32}
+	@test Quaternion(1, 0.5, 0, 0) isa Quaternion{Float64}
+	@test Quaternion(1, 0, 0, 0) * Quaternion(0, 1, 0, 0) === Quaternion(0.0, 0.0, 1.0, 0.0)
+	@test rotate_vector(Quaternion(0, 0, 1, 0), [1, 0, 0]) ≈ [-1.0, 0.0, 0.0]
+end
+
 @testset "active right-handed rotations" begin
 	ex, ey, ez = SVector(1.0, 0, 0), SVector(0, 1.0, 0), SVector(0, 0, 1.0)
 	@test rotate_vector(quat_rotation(π / 2, ez), ex) ≈ ey

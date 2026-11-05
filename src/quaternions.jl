@@ -7,15 +7,23 @@ Quaternion with vector part `(x, y, z)` and scalar part `w`, stored in the same
 Products follow the Hamilton convention and rotations are active: the vector
 `v` is rotated to `q v q*` (see [`rotate_vector`](@ref)). The type is `isbits`, so it can
 be passed to GPU kernels.
+
+`Quaternion(x, y, z, w)` promotes the components to a common floating-point
+type, so `Quaternion(0, 0, 0, 1)` is a `Quaternion{Float64}`.
 """
 struct Quaternion{T <: Real}
 	x::T
 	y::T
 	z::T
 	w::T
+
+	Quaternion{T}(x, y, z, w) where {T <: Real} = new{T}(x, y, z, w)
 end
 
-Quaternion(x::Real, y::Real, z::Real, w::Real) = Quaternion(promote(float(x), y, z, w)...)
+function Quaternion(x::Real, y::Real, z::Real, w::Real)
+	c = promote(float(x), float(y), float(z), float(w))
+	return Quaternion{eltype(c)}(c...)
+end
 
 """
     Quaternion(v::AbstractVector)
