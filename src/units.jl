@@ -27,7 +27,7 @@ function rpm2period(rpm,; unit="min")
         period = 1.0 / (rpm/60.0)
     end
     if unit == "hour"
-        period = 1.0 / (rpm/60.0/60.0)
+        period = 1.0 / (rpm*60.0)
     end
     return period
 end

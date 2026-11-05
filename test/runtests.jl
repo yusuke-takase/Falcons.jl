@@ -13,4 +13,5 @@ angdiff(a, b) = abs(rem2pi(a - b, RoundNearest))
 	@testset "invariants" include("test_invariants.jl")
 	@testset "regression" include("test_regression.jl")
 	@testset "io" include("test_io.jl")
+	@testset "units" include("test_units.jl")
 end
