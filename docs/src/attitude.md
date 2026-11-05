@@ -35,9 +35,9 @@ obs = Observation(attitude, inst, dets; start_time_s = t0, duration_s = 3600.0)
 
 Falcons does not read attitude files: convert the data to this frame before building the
 `RotQuaternion`. Constant frame changes can be applied to the whole series with a product, e.g.
-`frame * RotQuaternion(quats; ...)` for a rotation on the left (from the data's inertial frame to Ecliptic)
-or `RotQuaternion(quats; ...) * body_to_spin` on the right (from the spin-axis frame to the data's body
-frame). The angles of the [`InstrumentInfo`](@ref) are then defined with respect to that spin-axis frame.
+`inertial_to_ecl * RotQuaternion(quats; ...)` for a rotation on the left (from the data's inertial frame to
+Ecliptic) or `RotQuaternion(quats; ...) * spin_to_body` on the right (from the spin-axis frame to the data's
+body frame). The angles of the [`InstrumentInfo`](@ref) are then defined with respect to that spin-axis frame.
 
 ## Perturbations of the nominal attitude
 
@@ -57,4 +57,5 @@ By default every sample is computed exactly: the analytic attitude is evaluated 
 time series are interpolated to it. With `Observation(...; delta_time_s = Δ)` Falcons reproduces
 litebird_sim instead: the boresight rotation `A · S · bore2spin` is computed on anchors every `Δ` seconds
 (counted from `start_time_simulation_s`) and interpolated, and time-dependent detector quaternions are
-interpolated separately. Both modes are available on the CPU and on the GPU.
+interpolated separately. The anchors are computed for one block of samples at a time, so their memory does
+not grow with the length of the observation. Both modes are available on the CPU and on the GPU.

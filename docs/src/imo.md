@@ -18,19 +18,30 @@ det = DetectorInfo(imo, "$rel/<telescope>/<channel>/<detector>/detector_info")
 ```
 
 [`query`](@ref) accepts the same identifiers as `Imo.query` in litebird_sim: release paths (the `/releases`
-prefix is optional), UUID strings, and `/data_files/`, `/quantities/` or `/entities/` followed by a UUID. If
-a release holds several versions of a quantity, the most recently uploaded one is used. Only uncompressed
-`schema.json` files are read; decompress `schema.json.gz` first.
+prefix is optional), UUID strings, and `/data_files/`, `/quantities/`, `/entities/` or `/format_specs/`
+followed by a UUID. Only uncompressed `schema.json` files are read; decompress `schema.json.gz` first.
+
+If a release holds several versions of a quantity, Falcons returns the one with the latest `upload_date`
+(compared as ISO 8601 strings) and throws an `ArgumentError` if two versions share that date; litebird_sim
+returns any one of them.
 
 The constructors mirror litebird_sim's `from_imo` / `from_dict`: angles stored in degrees are converted to
 radians, `FreqChannelInfo` derives missing NETs and detector names, and unknown keys are ignored. A
 time-dependent detector quaternion is a dictionary with `start_time` (seconds), `sampling_rate_hz` and
-`quats`; calendar start times are not supported. Unlike litebird_sim, `pixel` and `squid` are stored as
-integers and no default bandpass is synthesised.
+`quats`; calendar start times are not supported. Unlike litebird_sim:
+
+- `pixel` and `squid` are stored as integers and no default bandpass is synthesised;
+- a JSON `null` is treated as a missing key, so the field keeps its default (litebird_sim fails on most of
+  them); a `null` detector quaternion raises an `ArgumentError`;
+- `FreqChannelInfo` from a dictionary without `channel` is named `"<bandcenter_ghz> GHz"` (litebird_sim's
+  `from_dict` names it `"0.0 GHz"`), and missing detector names are generated (litebird_sim's `from_dict`
+  requires them unless the channel has a single detector).
 
 ## Lists of detectors
 
-[`detector_list_from_parameters`](@ref) builds detectors from dictionaries with litebird_sim's keys:
+[`detector_list_from_parameters`](@ref) builds detectors from dictionaries with litebird_sim's keys. As in
+litebird_sim, `num_of_detectors_from_channel` takes the first detectors of the channel, or all of them if
+the channel has fewer (a negative number raises an `ArgumentError`):
 
 ```julia
 dets = detector_list_from_parameters(imo, [
