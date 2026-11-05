@@ -1,4 +1,4 @@
-# Migrating from Falcons 1.0
+# Migrating from Falcons 1.0.1
 
 This version follows litebird_sim's conventions and names, which changes both the API and some results:
 
@@ -13,7 +13,7 @@ This version follows litebird_sim's conventions and names, which changes both th
 
 ## Names
 
-| Falcons 1.0 | Now |
+| Falcons 1.0.1 | Now |
 |---|---|
 | `gen_ScanningStrategy(...)`, `ScanningStrategy` | [`SpinningScanningStrategy`](@ref), [`InstrumentInfo`](@ref), [`DetectorInfo`](@ref), [`IdealHWP`](@ref) and [`Observation`](@ref) |
 | `ss.alpha`, `ss.beta` (deg) | `spin_sun_angle_rad`, `InstrumentInfo.spin_boresight_angle_rad` |

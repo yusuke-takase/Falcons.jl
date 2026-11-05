@@ -45,7 +45,7 @@ save_h_maps(res, "h_maps")                              # litebird_sim's file la
 - [Time-dependent rotations and external attitude](@ref): `RotQuaternion`, measured attitudes, perturbations.
 - [Instrument database and parameter files](@ref): reading litebird_sim's IMO, TOML pipelines.
 - [GPU backend](@ref): computing on CUDA GPUs.
-- [Migrating from Falcons 1.0](@ref): old names and their replacements.
+- [Migrating from Falcons 1.0.1](@ref): old names and their replacements.
 - [API reference](@ref).
 
 ## Citing

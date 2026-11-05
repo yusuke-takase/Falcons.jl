@@ -15,7 +15,7 @@ makedocs(;
 		"Time-dependent rotations" => "attitude.md",
 		"Instrument database" => "imo.md",
 		"GPU backend" => "gpu.md",
-		"Migrating from 1.0" => "migration.md",
+		"Migrating from 1.0.1" => "migration.md",
 		"API reference" => "api.md",
 	],
 	checkdocs = :exports,
