@@ -261,9 +261,11 @@ by 360/365.25 degrees every `step` seconds instead of continuously.
 function get_pointings(ss::ScanningStrategy, start, stop, step)
 	time_array = _time_array(ss, start, stop)
 	det_dirs, pol_dirs = imo2ecl_coordinates(ss)
-	deg_per_day = 360 / 365.25
-	return _pointings(ss, time_array, det_dirs, pol_dirs, t -> deg2rad(deg_per_day * floor(t / step)))
+	return _pointings(ss, time_array, det_dirs, pol_dirs, _step_revol_angle(step))
 end
+
+"Anti-Sun rotation advancing by 360/365.25 degrees every `step` seconds."
+_step_revol_angle(step) = t -> deg2rad(360 / 365.25 * floor(t / step))
 
 """
 	get_pointing_pixels(ss::ScanningStrategy, start, stop)

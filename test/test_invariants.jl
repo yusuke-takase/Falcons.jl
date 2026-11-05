@@ -80,3 +80,17 @@ end
 	@test maximum(abs.(f7.h[seen] .- f1.h[seen])) < 1e-12
 	@test_throws ArgumentError h_nm(f1, 1, 0)
 end
+
+@testset "division does not change the samples" begin
+	# 0.5 Hz for 10 s: the samples are t = 0, 2, 4, 6, 8 s whatever the chunks.
+	ss = gen_ScanningStrategy(nside = 8, duration = 10, sampling_rate = 0.5, hwp_rpm = 46.0)
+	f1 = get_scanfield(ss; division = 1, spin_n = [0, 2], spin_m = [-4, 4])
+	@test sum(f1.hitmap) == 5
+	for division in (2, 3, 5, 7)
+		f = get_scanfield(ss; division, spin_n = [0, 2], spin_m = [-4, 4])
+		@test f.hitmap == f1.hitmap
+		@test isequal(f.h, f1.h)
+	end
+	f3 = get_scanfield_step(ss; division = 3, spin_n = [0, 2], spin_m = [-4, 4], step = 4)
+	@test isequal(f3.h, get_scanfield_step(ss; division = 1, spin_n = [0, 2], spin_m = [-4, 4], step = 4).h)
+end

@@ -60,14 +60,15 @@ function get_hnm_quantify(hₙₘ, spin_n, spin_m)
 end
 
 """
-    _scanfield(ss, pointings_between; division, spin_n, spin_m, verbose = false)
+    _scanfield(ss, revol_angle; division, spin_n, spin_m, verbose = false)
 
 Accumulate the hit map and spin moments, computing the pointings of
-`division` consecutive time chunks with `pointings_between(start, stop)`.
-Chunk boundaries are whole seconds, so `division` need not divide the
-duration. With `verbose = true` a message is logged after every chunk.
+`division` consecutive chunks of samples (`revol_angle` as in `_pointings`).
+The sample times come from the time grid of the whole scan, so the samples,
+and the result, do not depend on `division`. With `verbose = true` a message
+is logged after every chunk.
 """
-function _scanfield(ss::ScanningStrategy, pointings_between::F; division::Int, spin_n::AbstractVector, spin_m::AbstractVector, verbose::Bool = false) where {F}
+function _scanfield(ss::ScanningStrategy, revol_angle::F; division::Int, spin_n::AbstractVector, spin_m::AbstractVector, verbose::Bool = false) where {F}
 	division >= 1 || throw(ArgumentError("division must be ≥ 1, got $division"))
 	resol  = Resolution(ss.nside)
 	npix   = nside2npix(ss.nside)
@@ -75,10 +76,14 @@ function _scanfield(ss::ScanningStrategy, pointings_between::F; division::Int, s
 	hitmap = zeros(Int64, npix)
 	hₙₘ    = zeros(ComplexF64, (length(spin_n), length(spin_m), npix))
 	polang = Float64[get_pol_angle(ss, j) for j in eachindex(ss.quat)]
+	times  = _time_array(ss, 0, ss.duration)
+	nsamp  = length(times)
+	det_dirs, pol_dirs = imo2ecl_coordinates(ss)
 	for i in 1:division
-		chunk_start = div((i - 1) * ss.duration, division)
-		chunk_stop  = div(i * ss.duration, division)
-		theta, phi, psi, time = pointings_between(chunk_start, chunk_stop)
+		first = div((i - 1) * nsamp, division) + 1
+		last  = div(i * nsamp, division)
+		first > last && continue
+		theta, phi, psi, time = _pointings(ss, view(times, first:last), det_dirs, pol_dirs, revol_angle)
 		@inbounds for j in axes(theta, 2), k in eachindex(time)
 			Ω = ang2pixRing(resol, theta[k, j], phi[k, j])
 			ψ = psi[k, j]
@@ -88,7 +93,7 @@ function _scanfield(ss::ScanningStrategy, pointings_between::F; division::Int, s
 				hₙₘ[_n, _m, Ω] += cis(-(spin_n[_n] * ψ + spin_m[_m] * ϕ))
 			end
 		end
-		verbose && @info "scan field: chunk $i/$division done" chunk_stop
+		verbose && @info "scan field: chunk $i/$division done" last
 	end
 	for p in 1:npix, _m in eachindex(spin_m), _n in eachindex(spin_n)
 		hₙₘ[_n, _m, p] /= hitmap[p]
@@ -102,10 +107,11 @@ end
 
 Hit map and spin moments `h_{n,m}` of the whole scan (`0 ≤ t < ss.duration`),
 for every combination of `n ∈ spin_n` and `m ∈ spin_m`. The pointings are
-computed in `division` time chunks to bound memory use.
+computed in `division` chunks of samples to bound memory use; the result does
+not depend on `division`.
 """
 function get_scanfield(ss::ScanningStrategy; division::Int, spin_n::AbstractVector, spin_m::AbstractVector, verbose::Bool = false)
-	return _scanfield(ss, (a, b) -> get_pointings(ss, a, b); division, spin_n, spin_m, verbose)
+	return _scanfield(ss, t -> mod2pi(OMEGA_REVOL * t); division, spin_n, spin_m, verbose)
 end
 
 """
@@ -115,5 +121,5 @@ Same as [`get_scanfield`](@ref), with the anti-Sun direction advancing every
 `step` seconds (see `get_pointings(ss, start, stop, step)`).
 """
 function get_scanfield_step(ss::ScanningStrategy; division::Int, spin_n::AbstractVector, spin_m::AbstractVector, step, verbose::Bool = false)
-	return _scanfield(ss, (a, b) -> get_pointings(ss, a, b, step); division, spin_n, spin_m, verbose)
+	return _scanfield(ss, _step_revol_angle(step); division, spin_n, spin_m, verbose)
 end
