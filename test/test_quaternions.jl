@@ -26,6 +26,22 @@ end
 	@test isbitstype(Quaternion{Float64})
 end
 
+@testset "components are promoted to floating point" begin
+	@test Quaternion(0, 0, 0, 1) === Quaternion(0.0, 0.0, 0.0, 1.0)
+	@test Quaternion([0, 0, 0, 1]) === Quaternion(0.0, 0.0, 0.0, 1.0)
+	@test Quaternion(1.0f0, 0.5f0, 0.0f0, 1.0f0) isa Quaternion{Float32}
+	@test Quaternion(1, 0, 0, 0) * Quaternion(0, 1, 0, 0) === Quaternion(0.0, 0.0, 1.0, 0.0)
+	@test float(Quaternion{Int}(0, 0, 0, 1)) === one(Quaternion{Float64})
+	# Integer input to the rotations built from quaternions.
+	@test RotQuaternion(Quaternion(0, 0, 0, 2)).quats[1] === one(Quaternion{Float64})
+	@test RotQuaternion(Quaternion{Int}(0, 0, 0, 2)).quats[1] === one(Quaternion{Float64})
+	@test RotQuaternion([0, 0, 0, 1]) isa RotQuaternion{Float64}
+	r = RotQuaternion([Quaternion{Int}(0, 0, 0, 1), Quaternion{Int}(0, 0, 1, 0)]; start_time_s = 0, sampling_rate_hz = 1)
+	@test r isa RotQuaternion{Float64}
+	@test r.quats[2] === Quaternion(0.0, 0.0, 1.0, 0.0)
+	@test RotQuaternion([0 0; 0 0; 0 1; 1 0]; start_time_s = 0.0, sampling_rate_hz = 1.0).quats == r.quats
+end
+
 @testset "active right-handed rotations" begin
 	ex, ey, ez = SVector(1.0, 0, 0), SVector(0, 1.0, 0), SVector(0, 0, 1.0)
 	@test rotate_vector(quat_rotation(π / 2, ez), ex) ≈ ey

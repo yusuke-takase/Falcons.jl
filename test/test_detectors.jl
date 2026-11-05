@@ -13,6 +13,10 @@
 	series = RotQuaternion([q, q * quat_rotation_x(1e-3)]; start_time_s = 0.0, sampling_rate_hz = 1.0)
 	@test !is_constant(DetectorInfo(name = "a", quat = series).quat)
 	@test DetectorInfo(name = "a", sampling_rate_hz = 19).sampling_rate_hz === 19.0
+	# Integer quaternion components.
+	@test DetectorInfo(quat = [0, 0, 0, 1]).quat.quats[1] === one(Quaternion{Float64})
+	@test DetectorInfo(quat = Quaternion(0, 0, 1, 0)).quat.quats[1] === Quaternion(0.0, 0.0, 1.0, 0.0)
+	@test DetectorInfo(quat = Quaternion{Int}(0, 0, 0, 1)).quat.quats[1] === one(Quaternion{Float64})
 end
 
 @testset "detector_quat" begin

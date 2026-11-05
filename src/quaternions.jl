@@ -48,6 +48,7 @@ function Base.:*(a::Quaternion, b::Quaternion)
 end
 
 Base.:-(q::Quaternion) = Quaternion(-q.x, -q.y, -q.z, -q.w)
+Base.float(q::Quaternion) = Quaternion(float(q.x), float(q.y), float(q.z), float(q.w))
 Base.conj(q::Quaternion) = Quaternion(-q.x, -q.y, -q.z, q.w)
 Base.abs2(q::Quaternion) = q.x^2 + q.y^2 + q.z^2 + q.w^2
 Base.abs(q::Quaternion) = sqrt(abs2(q))
@@ -181,12 +182,17 @@ struct RotQuaternion{T <: Real}
 	end
 end
 
-RotQuaternion(q::Quaternion{T}) where {T} = RotQuaternion{T}([q], nothing, nothing)
+# The quaternions are stored with a floating-point element type, so that they
+# can hold their normalised values.
+_rotquat(quats::Vector{Quaternion{T}}, start_time_s, sampling_rate_hz) where {T} =
+	RotQuaternion{T}(quats, start_time_s, sampling_rate_hz)
+
+RotQuaternion(q::Quaternion) = _rotquat([float(q)], nothing, nothing)
 RotQuaternion(q::RotQuaternion) = q
 RotQuaternion(v::AbstractVector{<:Real}) = RotQuaternion(Quaternion(v))
 
-function RotQuaternion(quats::AbstractVector{Quaternion{T}}; start_time_s::Real, sampling_rate_hz::Real) where {T}
-	return RotQuaternion{T}(collect(quats), start_time_s, sampling_rate_hz)
+function RotQuaternion(quats::AbstractVector{<:Quaternion}; start_time_s::Real, sampling_rate_hz::Real)
+	return _rotquat([float(q) for q in quats], start_time_s, sampling_rate_hz)
 end
 
 function RotQuaternion(quats::AbstractMatrix{<:Real}; start_time_s::Real, sampling_rate_hz::Real)
