@@ -13,7 +13,8 @@ module FalconsCUDAExt
 using CUDA
 using Falcons
 using Falcons: _PlanData, _Series, _DetectorQuats, _sample_quat, _hwp_at, _ang2pix, _ang2pix_ring,
-	_anchor_block, _block_length, _with_anchors, compute_pointing_and_orientation, GPUBackend, Quaternion
+	_anchor_block, _block_length, _with_anchors, _NONFINITE_ANGLES, compute_pointing_and_orientation, GPUBackend,
+	Quaternion
 using Healpix: Resolution
 
 const THREADS = 256
@@ -113,32 +114,45 @@ function _k_pointings!(out, p, first, m, ndet)
 	return nothing
 end
 
-function _k_pixels!(pixels, psi, p, resol, nest, first, m, ndet)
+# The kernels that index maps skip samples with non-finite angles (whose pixel
+# index would be undefined) and set `bad[1]`; the host then throws, as the CPU
+# backend does. The inputs are checked on the host first, so this is a backstop.
+
+function _k_pixels!(pixels, psi, bad, p, resol, nest, first, m, ndet)
 	i, stride = _index(m)
 	@inbounds while i <= m * ndet
 		j = (i - 1) % m + 1
 		n = (i - 1) ÷ m + 1
 		θ, φ, ψ = compute_pointing_and_orientation(_sample_quat(p, first + j - 1, n))
-		pixels[j, n] = _ang2pix(resol, nest, θ, φ)
+		if !(isfinite(θ) & isfinite(φ) & isfinite(ψ))
+			bad[1] = Int32(1)
+			pixels[j, n] = 0
+		else
+			pixels[j, n] = _ang2pix(resol, nest, θ, φ)
+		end
 		psi[j, n] = ψ
 		i += stride
 	end
 	return nothing
 end
 
-function _k_hits!(hits, p, resol, nest, first, m, ndet)
+function _k_hits!(hits, bad, p, resol, nest, first, m, ndet)
 	i, stride = _index(m)
 	@inbounds while i <= m * ndet
 		j = (i - 1) % m + 1
 		n = (i - 1) ÷ m + 1
-		θ, φ, _ = compute_pointing_and_orientation(_sample_quat(p, first + j - 1, n))
-		CUDA.@atomic hits[_ang2pix(resol, nest, θ, φ)] += 1
+		θ, φ, ψ = compute_pointing_and_orientation(_sample_quat(p, first + j - 1, n))
+		if !(isfinite(θ) & isfinite(φ) & isfinite(ψ))
+			bad[1] = Int32(1)
+		else
+			CUDA.@atomic hits[_ang2pix(resol, nest, θ, φ)] += 1
+		end
 		i += stride
 	end
 	return nothing
 end
 
-function _k_h_maps!(re, im, hits, p, resol, first, m, ndet, columns, spin_n, spin_m)
+function _k_h_maps!(re, im, hits, bad, p, resol, first, m, ndet, columns, spin_n, spin_m)
 	i, stride = _index(m)
 	ncpl = length(spin_n)
 	@inbounds while i <= m * ndet
@@ -146,8 +160,13 @@ function _k_h_maps!(re, im, hits, p, resol, first, m, ndet, columns, spin_n, spi
 		n = (i - 1) ÷ m + 1
 		k = first + j - 1
 		θ, φ, ψ = compute_pointing_and_orientation(_sample_quat(p, k, n))
-		pix = _ang2pix_ring(resol, θ, φ)
 		χ = _hwp_at(p, k)
+		if !(isfinite(θ) & isfinite(φ) & isfinite(ψ) & isfinite(χ))
+			bad[1] = Int32(1)
+			i += stride
+			continue
+		end
+		pix = _ang2pix_ring(resol, θ, φ)
 		col = columns[n]
 		CUDA.@atomic hits[pix, col] += 1
 		for c in 1:ncpl
@@ -189,41 +208,48 @@ function Falcons._gpu_pointing_pixels(plan::_PlanData, nsamples::Int, ndet::Int,
 	backend::GPUBackend)
 	pixels = Matrix{Int}(undef, nsamples, ndet)
 	psi = Matrix{Float64}(undef, nsamples, ndet)
-	_on_gpus(backend, nsamples) do range
+	bad = _on_gpus(backend, nsamples) do range
 		dp, _keep = _upload(plan)
+		d_bad = CUDA.zeros(Int32, 1)
 		len = _block(plan, range, ndet)
 		for first in range.start:len:range.stop
 			m = min(len, range.stop - first + 1)
 			bp, anchors = _device_block(dp, plan, first, first + m - 1)
 			d_pix = CuArray{Int}(undef, m, ndet)
 			d_psi = CuArray{Float64}(undef, m, ndet)
-			@cuda threads = THREADS blocks = _blocks(m * ndet) _k_pixels!(d_pix, d_psi, bp, resol, nest, first, m, ndet)
+			@cuda threads = THREADS blocks = _blocks(m * ndet) _k_pixels!(d_pix, d_psi, d_bad, bp, resol, nest, first, m,
+				ndet)
 			pixels[first:first+m-1, :] = Array(d_pix)
 			psi[first:first+m-1, :] = Array(d_psi)
 			CUDA.unsafe_free!(d_pix)
 			CUDA.unsafe_free!(d_psi)
 			_free!(anchors)
 		end
-		nothing
+		Array(d_bad)[1] != 0
 	end
+	_check_finite_angles(bad)
 	return pixels, psi
 end
+
+_check_finite_angles(bad) = any(bad) ? throw(ArgumentError(_NONFINITE_ANGLES)) : nothing
 
 function Falcons._gpu_hits!(hits::Vector{Int}, plan::_PlanData, nsamples::Int, ndet::Int, resol::Resolution, nest::Bool,
 	backend::GPUBackend)
 	partials = _on_gpus(backend, nsamples) do range
 		dp, _keep = _upload(plan)
 		d_hits = CUDA.zeros(Int, length(hits))
+		d_bad = CUDA.zeros(Int32, 1)
 		len = plan.interp ? _block(plan, range, ndet) : length(range)
 		for first in range.start:len:range.stop
 			m = min(len, range.stop - first + 1)
 			bp, anchors = _device_block(dp, plan, first, first + m - 1)
-			@cuda threads = THREADS blocks = _blocks(m * ndet) _k_hits!(d_hits, bp, resol, nest, first, m, ndet)
+			@cuda threads = THREADS blocks = _blocks(m * ndet) _k_hits!(d_hits, d_bad, bp, resol, nest, first, m, ndet)
 			_free!(anchors)
 		end
-		Array(d_hits)
+		(Array(d_hits), Array(d_bad)[1] != 0)
 	end
-	for part in partials
+	_check_finite_angles(last.(partials))
+	for (part, _) in partials
 		hits .+= part
 	end
 	return hits
@@ -246,30 +272,37 @@ function Falcons._gpu_h_maps!(sums::Array{ComplexF64, 3}, hits::Matrix{Int}, pla
 		d_re = CUDA.zeros(Float64, size(sums))
 		d_im = CUDA.zeros(Float64, size(sums))
 		d_hits = CUDA.zeros(Int, size(hits))
+		d_bad = CUDA.zeros(Int32, 1)
 		d_cols, d_n, d_m = CuArray(columns), CuArray(spin_n), CuArray(spin_m)
 		len = plan.interp ? _block(plan, range, ndet) : length(range)
 		for first in range.start:len:range.stop
 			m = min(len, range.stop - first + 1)
 			bp, anchors = _device_block(dp, plan, first, first + m - 1)
-			@cuda threads = THREADS blocks = _blocks(m * ndet) _k_h_maps!(d_re, d_im, d_hits, bp, resol, first, m, ndet,
-				d_cols, d_n, d_m)
+			@cuda threads = THREADS blocks = _blocks(m * ndet) _k_h_maps!(d_re, d_im, d_hits, d_bad, bp, resol, first, m,
+				ndet, d_cols, d_n, d_m)
 			_free!(anchors)
 		end
-		(d_re, d_im, d_hits)
+		(d_re, d_im, d_hits, Array(d_bad)[1] != 0)
 	end
 	# Reduce the partial sums on the first device (device-to-device copies),
-	# then download once.
-	CUDA.device!(ids[1])
-	re, im, h = partials[1]
-	for (o_re, o_im, o_h) in partials[2:end]
-		re .+= CuArray(o_re)
-		im .+= CuArray(o_im)
-		h .+= CuArray(o_h)
-	end
-	_add_complex!(sums, Array(re), Array(im))
-	hits .+= Array(h)
-	for part in partials, a in part
-		CUDA.unsafe_free!(a)
+	# then download once. `device!` with a function restores the caller's
+	# device afterwards.
+	CUDA.device!(ids[1]) do
+		try
+			_check_finite_angles(last.(partials))
+			re, im, h = partials[1]
+			for (o_re, o_im, o_h) in partials[2:end]
+				re .+= CuArray(o_re)
+				im .+= CuArray(o_im)
+				h .+= CuArray(o_h)
+			end
+			_add_complex!(sums, Array(re), Array(im))
+			hits .+= Array(h)
+		finally
+			for part in partials, a in part[1:3]
+				CUDA.unsafe_free!(a)
+			end
+		end
 	end
 	return sums, hits
 end

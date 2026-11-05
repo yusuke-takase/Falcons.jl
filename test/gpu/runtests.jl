@@ -1,10 +1,13 @@
-# GPU tests, run separately from the main suite because they need CUDA:
+# GPU tests, run separately from the main suite because they need CUDA. From
+# the repository root (Julia 1.10 or later):
 #
-#     julia --project=test/gpu -e 'using Pkg; Pkg.instantiate()'   # once
+#     julia --project=test/gpu -e 'using Pkg; Pkg.develop(path = "."); Pkg.instantiate()'   # once
 #     julia -t 4 --project=test/gpu test/gpu/runtests.jl
 #
-# The GPU results are compared with the CPU backend (which is itself checked
-# against litebird_sim in the main suite).
+# `Pkg.develop` makes the environment use this checkout of Falcons (recorded in
+# test/gpu/Manifest.toml, which is not tracked). The GPU results are compared
+# with the CPU backend (which is itself checked against litebird_sim in the
+# main suite).
 
 import CUDA  # `import`: HDF5 and CUDA both export `attributes`
 using Falcons
@@ -12,9 +15,38 @@ using HDF5
 using Healpix
 using Test
 
+realpath(pkgdir(Falcons)) == realpath(joinpath(@__DIR__, "..", "..")) ||
+	error("the GPU tests load Falcons from $(pkgdir(Falcons)); run `Pkg.develop(path = \".\")` in the test/gpu environment")
+
 const REFDIR = joinpath(@__DIR__, "..", "reference")
 angdiff(a, b) = abs(rem2pi(a - b, RoundNearest))
 include(joinpath(@__DIR__, "..", "lbs_reference.jl"))
+include(joinpath(@__DIR__, "..", "nonfinite_cases.jl"))
+
+const EXT = Base.get_extension(Falcons, :FalconsCUDAExt)
+
+"Sample times and HWP angles evaluated in a kernel, with the device copy of a plan."
+function _k_times!(t, χ, p, n)
+	i = (CUDA.blockIdx().x - 1) * CUDA.blockDim().x + CUDA.threadIdx().x
+	if i <= n
+		@inbounds t[i] = Falcons._plan_time(p, i)
+		@inbounds χ[i] = Falcons._hwp_at(p, i)
+	end
+	return nothing
+end
+
+function device_times(obs)
+	plan, _ = Falcons._plan_data(obs, Ecliptic, :all)
+	dp, _keep = EXT._upload(plan)
+	n = obs.n_samples
+	t, χ = CUDA.zeros(Float64, n), CUDA.zeros(Float64, n)
+	CUDA.@cuda threads = 256 blocks = cld(n, 256) _k_times!(t, χ, dp, n)
+	host_t = [Falcons._plan_time(plan, k) for k in 1:n]
+	host_χ = [Falcons._hwp_at(plan, k) for k in 1:n]
+	return Array(t), Array(χ), host_t, host_χ
+end
+
+bits(x) = reinterpret(UInt64, x)
 
 if !CUDA.functional()
 	@warn "CUDA is not functional: skipping the GPU tests"
@@ -27,14 +59,13 @@ const ATOL = 1e-12
 
 function compare_pointings(obs)
 	for coord in (Ecliptic, Galactic)
-		cpu, χ_cpu = get_pointings(obs; output_coordinate_system = coord)
+		cpu, _ = get_pointings(obs; output_coordinate_system = coord)
 		for backend in BACKENDS
-			gpu, χ_gpu = get_pointings(obs; output_coordinate_system = coord, backend)
+			gpu, _ = get_pointings(obs; output_coordinate_system = coord, backend)
 			@test size(gpu) == size(cpu)
 			@test maximum(abs.(gpu[1, :, :] .- cpu[1, :, :])) < ATOL
 			@test maximum(angdiff.(gpu[2, :, :], cpu[2, :, :])) < ATOL
 			@test maximum(angdiff.(gpu[3, :, :], cpu[3, :, :])) < ATOL
-			@test isequal(χ_gpu, χ_cpu)
 		end
 	end
 end
@@ -124,6 +155,65 @@ end
 		whole = make_h_maps(obs; nside = 128, n_m_couples = couples, backend = GPUBackend())
 		@test whole.hits == cpu.hits
 		@test maximum(abs.(whole.h .- cpu.h)) < 1e-9
+	end
+
+	@testset "times and HWP angles on the device" begin
+		# The h-map kernel evaluates the sample times and HWP angles on the
+		# device: they must be bit-identical to the host values (explicit fma).
+		scan, inst = satellite_preset(:LiteBIRD)
+		h5open(LBS_REF) do f
+			obs_b = lbs_observation_b(f)
+			for obs in (obs_b, split_observation(obs_b, 3)[3], lbs_observation_b(f; delta_time_s = 2.0),
+				Observation(scan, inst, DetectorInfo(name = "d", sampling_rate_hz = 19.0); start_time_s = 7.3e7,
+					duration_s = 3600.0, start_time_simulation_s = 1.0, hwp = IdealHWP(ang_speed_radpsec = 4.8,
+						start_angle_rad = 0.3)))
+				t, χ, host_t, host_χ = device_times(obs)
+				@test bits.(t) == bits.(host_t)
+				@test bits.(χ) == bits.(host_χ)
+				@test host_χ == get_pointings(obs)[2]
+			end
+		end
+	end
+
+	@testset "non-finite inputs stop the GPU backend as the CPU one" begin
+		for (name, obs) in nonfinite_observations(), backend in BACKENDS
+			@test_throws ArgumentError get_pointings(obs; backend)
+			@test_throws ArgumentError get_pointing_pixels(obs; nside = 8, backend)
+			@test_throws ArgumentError get_hitmap(obs; nside = 8, backend)
+			@test_throws ArgumentError make_h_maps(obs; nside = 8, backend)
+		end
+		# Backstop in the kernels: a plan corrupted after the host checks.
+		scan, inst = satellite_preset(:LiteBIRD)
+		for delta in (nothing, 2.0)
+			obs = Observation(scan, inst, DetectorInfo(name = "a", sampling_rate_hz = 1.0); start_time_s = 0.0,
+				duration_s = 10.0, delta_time_s = delta)
+			plan, _ = Falcons._plan_data(obs, Galactic, :all)
+			plan.dets.constant[1] = Quaternion(NaN, 0.0, 0.0, 1.0)
+			resol = Resolution(8)
+			npix = resol.numOfPixels
+			@test_throws ArgumentError Falcons._cpu_pointing_pixels(plan, obs.n_samples, 1, resol, false)
+			for backend in BACKENDS
+				@test_throws ArgumentError Falcons._gpu_pointing_pixels(plan, obs.n_samples, 1, resol, false, backend)
+				@test_throws ArgumentError Falcons._gpu_hits!(zeros(Int, npix), plan, obs.n_samples, 1, resol, false, backend)
+				@test_throws ArgumentError Falcons._gpu_h_maps!(zeros(ComplexF64, 1, npix, 1), zeros(Int, npix, 1), plan,
+					obs.n_samples, [1], [2.0], [0.0], resol, backend)
+			end
+		end
+	end
+
+	@testset "the caller's current device is kept" begin
+		scan, inst = satellite_preset(:LiteBIRD)
+		obs = Observation(scan, inst, DetectorInfo(name = "d", sampling_rate_hz = 1.0); start_time_s = 0.0, duration_s = 100.0)
+		for id in (NGPU > 1 ? (NGPU - 1, 0) : (0,))
+			CUDA.device!(id)
+			for backend in BACKENDS
+				make_h_maps(obs; nside = 8, backend)
+				get_hitmap(obs; nside = 8, backend)
+				get_pointings(obs; backend)
+				@test CUDA.deviceid(CUDA.device()) == id
+			end
+		end
+		CUDA.device!(0)
 	end
 
 	@testset "errors" begin

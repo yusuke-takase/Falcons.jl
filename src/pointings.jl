@@ -155,14 +155,65 @@ _series_or_analytic(a::RotQuaternion) = is_constant(a) ? _Series(fill(a.quats[1]
 _series_or_nothing(::Nothing) = nothing
 _series_or_nothing(a::RotQuaternion) = _series_or_analytic(a)
 
+"Throw an `ArgumentError` unless every quaternion of `quats` is a finite unit quaternion."
+function _check_unit_quats(quats, what::AbstractString)
+	for (k, q) in enumerate(quats)
+		n2 = abs2(q)
+		(isfinite(n2) && abs(n2 - 1) <= 1e-6) ||
+			throw(ArgumentError("$what: quaternion $k is $q, not a finite unit quaternion (missing data?)"))
+	end
+	return nothing
+end
+
+function _check_finite(x::Real, what::AbstractString)
+	isfinite(x) || throw(ArgumentError("$what is $x"))
+	return nothing
+end
+
+"""
+    _check_inputs(obs, idx)
+
+Throw an `ArgumentError` for a non-finite time, rate or angle, or a zero,
+non-finite or non-normalised quaternion (e.g. a missing sample of an
+attitude): the GPU kernels cannot raise, and would otherwise accumulate
+into undefined pixels.
+"""
+function _check_inputs(obs::Observation, idx)
+	_check_finite(obs.start_time_s, "start_time_s")
+	_check_finite(obs.start_time_simulation_s, "start_time_simulation_s")
+	_check_finite(obs.sampling_rate_hz, "sampling_rate_hz")
+	obs.delta_time_s === nothing || _check_finite(obs.delta_time_s, "delta_time_s")
+	if obs.attitude isa SpinningScanningStrategy
+		for f in fieldnames(SpinningScanningStrategy)
+			_check_finite(getfield(obs.attitude, f), "the scanning strategy's $f")
+		end
+	else
+		_check_unit_quats(obs.attitude.quats, "the attitude")
+	end
+	obs.spin_perturbation === nothing || _check_unit_quats(obs.spin_perturbation.quats, "the spin perturbation")
+	_check_unit_quats((bore2spin_quat(obs.instrument),), "the boresight-to-spin rotation of the instrument")
+	for i in idx
+		_check_unit_quats(obs.detectors[i].quat.quats, "the quaternion of detector \"$(obs.detectors[i].name)\"")
+	end
+	if obs.hwp !== nothing
+		_check_finite(obs.hwp.ang_speed_radpsec, "the HWP's ang_speed_radpsec")
+		_check_finite(obs.hwp.start_angle_rad, "the HWP's start_angle_rad")
+	end
+	return nothing
+end
+
+const _NONFINITE_ANGLES = "some samples have non-finite pointing or HWP angles; check the quaternions, " *
+						  "the scan parameters and the times"
+
 """
     _plan_data(obs, coord, detector_idx) -> (_PlanData, selected detector indices)
 
-Check that every time series covers the samples (or anchors) it is evaluated
-at, and precompute what the samples need.
+Check the inputs (see `_check_inputs`) and that every time series covers the
+samples (or anchors) it is evaluated at, and precompute what the samples need.
 """
 function _plan_data(obs::Observation, coord::CoordinateSystem, detector_idx)
 	idx = _detector_indices(obs, detector_idx)
+	_check_inputs(obs, idx)
 	g = coordinate_quat(coord)
 	b = bore2spin_quat(obs.instrument)
 	t_first, t_last = sample_time(obs, 1), sample_time(obs, obs.n_samples)
@@ -398,15 +449,22 @@ end
 function _cpu_pointing_pixels(plan::_PlanData, nsamples::Int, ndet::Int, resol::Resolution, nest::Bool)
 	pixels = Matrix{Int}(undef, nsamples, ndet)
 	psi = Matrix{Float64}(undef, nsamples, ndet)
+	bad = Threads.Atomic{Bool}(false)
 	_foreach_block(plan, nsamples) do k_first, k_last, bp
 		@threads for k in k_first:k_last
 			@inbounds for n in 1:ndet
 				θ, φ, ψ = compute_pointing_and_orientation(_sample_quat(bp, k, n))
-				pixels[k, n] = _healpix_ang2pix(resol, nest, θ, φ)
+				if !(isfinite(θ) & isfinite(φ) & isfinite(ψ))
+					bad[] = true
+					pixels[k, n] = 0
+				else
+					pixels[k, n] = _healpix_ang2pix(resol, nest, θ, φ)
+				end
 				psi[k, n] = ψ
 			end
 		end
 	end
+	bad[] && throw(ArgumentError(_NONFINITE_ANGLES))
 	return pixels, psi
 end
 
@@ -420,15 +478,21 @@ function _foreach_chunk(f::F, plan::_PlanData, nsamples::Int, ndet::Int, resol::
 	len = _block_length(plan, nsamples)
 	pixels = Matrix{Int}(undef, len, ndet)
 	psi = Matrix{Float64}(undef, len, ndet)
+	bad = Threads.Atomic{Bool}(false)
 	_foreach_block(plan, nsamples) do first, last, bp
 		m = last - first + 1
 		@threads for j in 1:m
 			@inbounds for n in 1:ndet
 				θ, φ, ψ = compute_pointing_and_orientation(_sample_quat(bp, first + j - 1, n))
-				pixels[j, n] = _healpix_ang2pix(resol, nest, θ, φ)
-				psi[j, n] = ψ
+				if !(isfinite(θ) & isfinite(φ) & isfinite(ψ))
+					bad[] = true
+				else
+					pixels[j, n] = _healpix_ang2pix(resol, nest, θ, φ)
+					psi[j, n] = ψ
+				end
 			end
 		end
+		bad[] && throw(ArgumentError(_NONFINITE_ANGLES))
 		f(first, view(pixels, 1:m, :), view(psi, 1:m, :))
 	end
 	return nothing

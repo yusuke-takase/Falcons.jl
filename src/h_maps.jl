@@ -139,6 +139,7 @@ function make_h_maps(observations::AbstractVector{<:Observation}; nside::Integer
 		_foreach_chunk(plan, obs.n_samples, length(columns), resol, false) do first, pixels, psi
 			for j in axes(pixels, 1)
 				χ[j] = _hwp_at(plan, first + j - 1)
+				isfinite(χ[j]) || throw(ArgumentError(_NONFINITE_ANGLES))
 			end
 			@inbounds for (n, col) in enumerate(columns), j in axes(pixels, 1)
 				p = pixels[j, n]

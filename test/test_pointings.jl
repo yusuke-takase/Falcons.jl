@@ -160,3 +160,21 @@ end
 		Falcons._CHUNK_SAMPLES[] = default
 	end
 end
+
+@testset "non-finite inputs are rejected" begin
+	for (name, obs) in nonfinite_observations()
+		@testset "$name" begin
+			@test_throws ArgumentError get_pointings(obs)
+			@test_throws ArgumentError get_pointing_pixels(obs; nside = 8)
+			@test_throws ArgumentError get_hitmap(obs; nside = 8)
+			@test_throws ArgumentError make_h_maps(obs; nside = 8)
+		end
+	end
+	# Backstop inside the loops, for a plan corrupted after the checks.
+	scan, inst = satellite_preset(:LiteBIRD)
+	obs = Observation(scan, inst, DetectorInfo(name = "a", sampling_rate_hz = 1.0); start_time_s = 0.0, duration_s = 10.0)
+	plan, _ = Falcons._plan_data(obs, Galactic, :all)
+	plan.dets.constant[1] = Quaternion(NaN, 0.0, 0.0, 1.0)
+	@test_throws ArgumentError Falcons._cpu_pointing_pixels(plan, obs.n_samples, 1, Resolution(8), false)
+	@test_throws ArgumentError Falcons._foreach_chunk((_...) -> nothing, plan, obs.n_samples, 1, Resolution(8), false)
+end

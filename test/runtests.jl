@@ -11,6 +11,7 @@ const REFDIR = joinpath(@__DIR__, "reference")
 angdiff(a, b) = abs(rem2pi(a - b, RoundNearest))
 
 include("lbs_reference.jl")
+include("nonfinite_cases.jl")
 
 @testset "Falcons.jl" begin
 	@testset "quaternions" include("test_quaternions.jl")
