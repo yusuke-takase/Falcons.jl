@@ -129,7 +129,7 @@ function make_h_maps(observations::AbstractVector{<:Observation}; nside::Integer
 	for obs in observations
 		plan = _pointing_plan(obs, output_coordinate_system, :all)
 		columns = Int[something(findfirst(==(det.name), names)) for det in obs.detectors]
-		χ = zeros(min(_CHUNK_SAMPLES, obs.n_samples))
+		χ = zeros(_block_length(plan))
 		_foreach_chunk(plan, resol, false) do first, pixels, psi
 			for j in axes(pixels, 1)
 				χ[j] = _hwp_angle_at(obs, first + j - 1)

@@ -119,3 +119,44 @@ end
 	end
 	@test get_hitmap(split_observation(obs, 3); nside = 64) == get_hitmap(obs; nside = 64)
 end
+
+@testset "interpolation anchors are computed per block" begin
+	scan, inst = satellite_preset(:LiteBIRD)
+	q0 = detector_quat(0.1, 0.2)
+	wobble = RotQuaternion([quat_rotation_x(1e-4 * sin(0.3 * k)) * q0 for k in 0:40]; start_time_s = 99.0, sampling_rate_hz = 0.25)
+	dets = [DetectorInfo(name = "a", sampling_rate_hz = 3.0), DetectorInfo(name = "b", sampling_rate_hz = 3.0, quat = q0),
+		DetectorInfo(name = "c", sampling_rate_hz = 3.0, quat = wobble)]
+	obs = Observation(scan, inst, dets; start_time_s = 100.0, duration_s = 150.0, hwp = IdealHWP(ang_speed_radpsec = 1.0),
+		start_time_simulation_s = 7.0, delta_time_s = 2.0)
+	ref_pt, _ = get_pointings(obs)
+	ref_px = get_pointing_pixels(obs; nside = 32)
+	ref_hits = get_hitmap(obs; nside = 32)
+	ref_h = make_h_maps(obs; nside = 16, n_m_couples = [(0, 0), (2, 0), (2, 4)])
+	# The plan holds no anchors, whatever the duration of the observation.
+	long = Observation(scan, inst, dets[1:2]; start_time_s = 100.0, duration_s = 30 * 86400.0, delta_time_s = 2.0)
+	short = Observation(scan, inst, dets[1:2]; start_time_s = 100.0, duration_s = 60.0, delta_time_s = 2.0)
+	@test Base.summarysize(Falcons._pointing_plan(long, Galactic, :all)) ==
+		  Base.summarysize(Falcons._pointing_plan(short, Galactic, :all))
+	default = Falcons._CHUNK_SAMPLES[]
+	try
+		for len in (1, 2, 7, 64)
+			Falcons._CHUNK_SAMPLES[] = len
+			@test get_pointings(obs)[1] == ref_pt
+			px = get_pointing_pixels(obs; nside = 32)
+			@test (px.pixels, px.psi) == (ref_px.pixels, ref_px.psi)
+			@test get_hitmap(obs; nside = 32) == ref_hits
+			h = make_h_maps(obs; nside = 16, n_m_couples = [(0, 0), (2, 0), (2, 4)])
+			@test h.hits == ref_h.hits
+			@test h.h == ref_h.h
+			blk = Falcons._anchor_block(Falcons._pointing_plan(obs, Galactic, :all), 1, len)
+			@test size(blk.quats, 1) <= cld(len, 6) + 2  # 6 samples per anchor interval
+			# Samples sparser than the anchors (one sample every 4 anchors).
+			sparse = Observation(scan, inst, DetectorInfo(name = "s", sampling_rate_hz = 0.125); start_time_s = 100.0,
+				duration_s = 4000.0, delta_time_s = 2.0)
+			plan = Falcons._pointing_plan(sparse, Galactic, :all)
+			@test size(Falcons._anchor_block(plan, 1, Falcons._block_length(plan)).quats, 1) <= len + 4
+		end
+	finally
+		Falcons._CHUNK_SAMPLES[] = default
+	end
+end
