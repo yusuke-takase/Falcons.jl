@@ -166,6 +166,9 @@ Write one HDF5 file per detector, `h_maps_det_<name>.h5`, in the layout used by
 `detector_split`, `time_split`, `duration_s` and `sampling_rate_Hz`, and one
 group `"n,m"` per couple holding the datasets `Re` and `Im` (RING ordering).
 Returns the paths of the files written.
+
+The string attributes are scalar variable-length UTF-8 strings, as written by
+h5py, so that litebird_sim reads them as `str`.
 """
 function save_h_maps(res::HMapsResult, output_directory::AbstractString)
 	mkpath(output_directory)
@@ -173,11 +176,11 @@ function save_h_maps(res::HMapsResult, output_directory::AbstractString)
 	for (d, det) in enumerate(res.detectors)
 		path = joinpath(output_directory, "h_maps_det_$(det).h5")
 		h5open(path, "w") do f
+			_write_vlen_string_attribute(f, "coordinate_system", string(res.coordinate_system))
+			_write_vlen_string_attribute(f, "det", det)
+			_write_vlen_string_attribute(f, "detector_split", res.detector_split)
+			_write_vlen_string_attribute(f, "time_split", res.time_split)
 			attrs = attributes(f)
-			attrs["coordinate_system"] = string(res.coordinate_system)
-			attrs["det"] = det
-			attrs["detector_split"] = res.detector_split
-			attrs["time_split"] = res.time_split
 			attrs["duration_s"] = res.duration_s
 			attrs["sampling_rate_Hz"] = res.sampling_rate_hz
 			for (c, (n, m)) in enumerate(res.n_m_couples)
@@ -188,6 +191,23 @@ function save_h_maps(res::HMapsResult, output_directory::AbstractString)
 		push!(paths, path)
 	end
 	return paths
+end
+
+# HDF5.jl writes a `String` attribute as a fixed-length string, which h5py
+# returns as `bytes`; litebird_sim needs `str` (it looks up the coordinate
+# system by name).
+function _write_vlen_string_attribute(obj, name::AbstractString, value::AbstractString)
+	dtype = HDF5.datatype(String)  # variable length, UTF-8
+	dspace = HDF5.Dataspace(HDF5.API.h5s_create(HDF5.API.H5S_SCALAR))
+	attr = create_attribute(obj, name, dtype, dspace)
+	try
+		write_attribute(attr, dtype, String(value))
+	finally
+		close(attr)
+		close(dspace)
+		close(dtype)
+	end
+	return nothing
 end
 
 """

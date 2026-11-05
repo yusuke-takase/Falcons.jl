@@ -88,6 +88,17 @@ end
 			@test (read(attrs["detector_split"]), read(attrs["time_split"])) == ("full", "full")
 			@test sort(keys(f)) == ["0,0", "2,-4", "2,0"]
 			@test read(f["2,-4/Re"]) == real.(h_map(res, "a", 2, -4))
+			# Scalar variable-length UTF-8 strings, which h5py (and so
+			# litebird_sim) reads as `str` rather than `bytes`.
+			for key in ("coordinate_system", "det", "detector_split", "time_split")
+				attr = attrs[key]
+				dtype = HDF5.datatype(attr)
+				@test HDF5.API.h5t_get_class(dtype) == HDF5.API.H5T_STRING
+				@test HDF5.API.h5t_is_variable_str(dtype)
+				@test HDF5.API.h5t_get_cset(dtype) == HDF5.API.H5T_CSET_UTF8
+				@test HDF5.API.h5s_get_simple_extent_type(HDF5.dataspace(attr)) == HDF5.API.H5S_SCALAR
+				close(dtype)
+			end
 		end
 		back = load_h_maps_from_file(paths[2])
 		@test back.detectors == ["b"]
