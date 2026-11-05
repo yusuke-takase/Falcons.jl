@@ -1,6 +1,6 @@
 # Falcons
 
-<img src="https://user-images.githubusercontent.com/83496454/132532967-9c2f0e19-d920-4b94-863f-93236e093ff9.png" width="600">
+<img src="docs/src/assets/logo.png" width="600">
 
 This logo was created with the help of our dear collaborator Jonathan Aumont.
 
@@ -16,7 +16,7 @@ tests check that both codes give the same pointings, HWP angles, hit maps and h-
 litebird_sim's instrument databases (IMO) and writes h-maps in litebird_sim's file layout. It runs
 multithreaded on a CPU and, optionally, on one or several CUDA GPUs.
 
-![Figure](https://user-images.githubusercontent.com/83496454/155742440-294f6b97-1305-43ac-8d57-8534eeab7005.gif)
+![Figure](tutorial/scan_anime.gif)
 
 ## Installation
 
