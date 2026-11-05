@@ -26,6 +26,22 @@ Base.@kwdef struct SpinningScanningStrategy
 	spin_rate_hz::Float64
 end
 
+"""
+    SpinningScanningStrategy(imo::Imo, url)
+
+Scanning strategy from an IMO data file with `spin_sun_angle_deg`,
+`precession_period_min` and `spin_rate_rpm`, as
+`SpinningScanningStrategy.from_imo` in litebird_sim.
+"""
+function SpinningScanningStrategy(imo::Imo, url::AbstractString)
+	m = _metadata(imo, url)
+	return SpinningScanningStrategy(
+		spin_sun_angle_rad = deg2rad(Float64(m["spin_sun_angle_deg"])),
+		precession_rate_hz = 1.0 / (60.0 * m["precession_period_min"]),
+		spin_rate_hz = m["spin_rate_rpm"] / 60.0,
+	)
+end
+
 function Base.show(io::IO, ::MIME"text/plain", s::SpinningScanningStrategy)
 	println(io, "SpinningScanningStrategy")
 	println(io, "  spin_sun_angle_rad : ", s.spin_sun_angle_rad, " (", rad2deg(s.spin_sun_angle_rad), "°)")

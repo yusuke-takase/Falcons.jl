@@ -21,4 +21,6 @@ include("lbs_reference.jl")
 	@testset "observations" include("test_observations.jl")
 	@testset "pointings" include("test_pointings.jl")
 	@testset "h_maps" include("test_h_maps.jl")
+	@testset "imo" include("test_imo.jl")
+	@testset "pipelines" include("test_pipelines.jl")
 end

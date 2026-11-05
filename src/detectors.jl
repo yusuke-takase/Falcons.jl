@@ -76,8 +76,16 @@ detector_quat(θ, φ; ψ = 0.0) = quat_rotation_z(φ) * (quat_rotation_y(θ) * q
 """
     FreqChannelInfo(; bandcenter_ghz, channel = nothing, ...)
 
-Frequency-channel parameters, with the same fields and defaults as
-`FreqChannelInfo` in litebird_sim (the bandpass object is not included).
+Frequency-channel parameters, with the same fields, defaults and
+post-initialisation as `FreqChannelInfo` in litebird_sim (the bandpass object
+is not included):
+
+- `channel` defaults to `"<bandcenter_ghz> GHz"` with one decimal;
+- `number_of_detectors` is inferred from `detector_names` or `detector_objs`
+  when it is 0, and missing names become `det0`, `det1`, …;
+- a zero `net_channel_ukrts` or `net_detector_ukrts` is derived from the other
+  one with the √N scaling;
+- `detector_objs` are stored as UUID strings (a URL keeps its last component).
 """
 Base.@kwdef struct FreqChannelInfo
 	bandcenter_ghz::Float64
@@ -98,6 +106,51 @@ Base.@kwdef struct FreqChannelInfo
 	number_of_detectors::Int = 0
 	detector_names::Vector{String} = String[]
 	detector_objs::Vector{String} = String[]
+
+	function FreqChannelInfo(bandcenter_ghz, channel, bandwidth_ghz, band_freqs_ghz, band_weights, net_detector_ukrts,
+		net_channel_ukrts, pol_sensitivity_channel_ukarcmin, sampling_rate_hz, fwhm_arcmin, ellipticity, psi_rad,
+		fknee_mhz, fmin_hz, alpha, number_of_detectors, detector_names, detector_objs)
+		channel = channel === nothing ? @sprintf("%.1f GHz", bandcenter_ghz) : String(channel)
+		names = String.(detector_names)
+		objs = url_to_uuid.(String.(detector_objs))
+		if number_of_detectors > 0
+			if isempty(names)
+				names = ["det$(i - 1)" for i in 1:number_of_detectors]
+			elseif length(names) != number_of_detectors
+				throw(ArgumentError("$(length(names)) detector names for $number_of_detectors detectors"))
+			end
+			isempty(objs) || length(objs) == number_of_detectors ||
+				throw(ArgumentError("$(length(objs)) detector objects for $number_of_detectors detectors"))
+		elseif !isempty(names)
+			number_of_detectors = length(names)
+		elseif !isempty(objs)
+			number_of_detectors = length(objs)
+		else
+			number_of_detectors = 1
+			names = ["det0"]
+		end
+		if net_channel_ukrts == 0 && net_detector_ukrts > 0
+			net_channel_ukrts = net_detector_ukrts / sqrt(number_of_detectors)
+		elseif net_channel_ukrts > 0 && net_detector_ukrts == 0
+			net_detector_ukrts = net_channel_ukrts * sqrt(number_of_detectors)
+		end
+		return new(bandcenter_ghz, channel, bandwidth_ghz, band_freqs_ghz, band_weights, net_detector_ukrts,
+			net_channel_ukrts, pol_sensitivity_channel_ukarcmin, sampling_rate_hz, fwhm_arcmin, ellipticity, psi_rad,
+			fknee_mhz, fmin_hz, alpha, number_of_detectors, names, objs)
+	end
+end
+
+"""
+    get_boresight_detector(ch::FreqChannelInfo; name = "mock") -> DetectorInfo
+
+A detector looking along the boresight with the averaged parameters of the
+channel, as `FreqChannelInfo.get_boresight_detector` in litebird_sim.
+"""
+function get_boresight_detector(ch::FreqChannelInfo; name::AbstractString = "mock")
+	return DetectorInfo(name = name, channel = ch.channel, fwhm_arcmin = ch.fwhm_arcmin, ellipticity = ch.ellipticity,
+		psi_rad = ch.psi_rad, net_ukrts = ch.net_detector_ukrts, fknee_mhz = ch.fknee_mhz, fmin_hz = ch.fmin_hz,
+		alpha = ch.alpha, sampling_rate_hz = ch.sampling_rate_hz, bandwidth_ghz = ch.bandwidth_ghz,
+		bandcenter_ghz = ch.bandcenter_ghz)
 end
 
 """
@@ -135,4 +188,185 @@ function bore2spin_quat(inst::InstrumentInfo)
 	q = quat_rotation_y(inst.spin_boresight_angle_rad) * q
 	q = quat_rotation_z(inst.spin_rotangle_rad) * q
 	return normalize(q)
+end
+
+
+# ----------------------------------------------------------------------------
+# Construction from IMO metadata (the `from_dict` / `from_imo` methods of
+# litebird_sim)
+
+_opt_string(x) = x === nothing ? nothing : string(x)
+_opt_int(x::Nothing) = nothing
+_opt_int(x::Integer) = Int(x)
+_opt_int(x::Real) = isinteger(x) ? Int(x) : throw(ArgumentError("expected an integer, got $x"))
+function _opt_int(x::AbstractString)
+	v = tryparse(Int, strip(x))
+	v === nothing && throw(ArgumentError("expected an integer, got \"$x\""))
+	return v
+end
+_opt_floats(x) = x === nothing ? nothing : Float64.(x)
+
+function _quat_from_metadata(q)
+	q isa AbstractDict || return RotQuaternion(Float64.(q))
+	start_time = get(q, "start_time", nothing)
+	start_time isa AbstractString &&
+		throw(ArgumentError("time-dependent quaternions with a calendar start time (\"$start_time\") are not supported; use seconds"))
+	haskey(q, "quats") ||
+		throw(ArgumentError("time-dependent quaternions stored outside the metadata (\"quaternion_matrix_shape\") are not supported"))
+	quats = [Quaternion(Float64.(row)) for row in q["quats"]]
+	start_time === nothing && return RotQuaternion(only(quats))
+	return RotQuaternion(quats; start_time_s = start_time, sampling_rate_hz = q["sampling_rate_hz"])
+end
+
+function _detector_field(name::Symbol, value)
+	if name === :quat
+		value === nothing && throw(ArgumentError("the detector quaternion is null"))
+		return _quat_from_metadata(value)
+	end
+	name in (:pixel, :squid) && return _opt_int(value)
+	name in (:wafer, :pixtype, :channel, :pol, :orient) && return _opt_string(value)
+	name === :name && return string(value)
+	name in (:band_freqs_ghz, :band_weights, :pointing_theta_phi_psi_deg, :pointing_u_v) && return _opt_floats(value)
+	return Float64(value)
+end
+
+"""
+    DetectorInfo(metadata::AbstractDict)
+    DetectorInfo(imo::Imo, url)
+
+Detector parameters from a dictionary (e.g. the metadata of an IMO
+`detector_info` data file), as `DetectorInfo.from_dict` / `from_imo` in
+litebird_sim. Keys that are not fields are ignored. `quat` may be a list of 4
+numbers or a dictionary with `start_time` (s), `sampling_rate_hz` and `quats`
+for a time-dependent rotation. Unlike litebird_sim, `pixel` and `squid` are
+converted to integers, no default bandpass is synthesised, and a `null` value
+(`nothing`) is treated as a missing key, so that the field keeps its default;
+a `null` quaternion throws an `ArgumentError`.
+"""
+function DetectorInfo(metadata::AbstractDict)
+	kw = Dict{Symbol, Any}()
+	_set_detector_fields!(kw, metadata)
+	return DetectorInfo(; kw...)
+end
+
+function _set_detector_fields!(kw::AbstractDict, metadata::AbstractDict)
+	for f in fieldnames(DetectorInfo)
+		key = string(f)
+		haskey(metadata, key) || continue
+		value = metadata[key]
+		value === nothing && f !== :quat && continue
+		kw[f] = _detector_field(f, value)
+	end
+	return kw
+end
+
+DetectorInfo(imo::Imo, url::AbstractString) = DetectorInfo(_metadata(imo, url))
+
+function _with_fields(det::DetectorInfo, overrides::AbstractDict)
+	kw = Dict{Symbol, Any}(f => getfield(det, f) for f in fieldnames(DetectorInfo))
+	_set_detector_fields!(kw, overrides)
+	return DetectorInfo(; kw...)
+end
+
+"""
+    FreqChannelInfo(metadata::AbstractDict)
+    FreqChannelInfo(imo::Imo, url)
+
+Channel parameters from a dictionary or an IMO `channel_info` data file, as
+`FreqChannelInfo.from_dict` / `from_imo` in litebird_sim, with two
+differences. The post-initialisation of the keyword constructor is applied
+once, to the values of the dictionary: a missing `channel` becomes
+`"<bandcenter_ghz> GHz"` (litebird_sim's `from_dict` gives `"0.0 GHz"`) and
+missing `detector_names` are generated (litebird_sim's `from_dict` fails
+unless the channel has a single detector). A `null` value (`nothing`) is
+treated as a missing key.
+"""
+function FreqChannelInfo(metadata::AbstractDict)
+	kw = Dict{Symbol, Any}(:bandcenter_ghz => 0.0)
+	for f in fieldnames(FreqChannelInfo)
+		key = string(f)
+		haskey(metadata, key) || continue
+		v = metadata[key]
+		v === nothing && continue
+		kw[f] = f === :channel ? _opt_string(v) :
+				f === :number_of_detectors ? Int(v) :
+				f in (:detector_names, :detector_objs) ? String.(v) :
+				f in (:band_freqs_ghz, :band_weights) ? _opt_floats(v) : Float64(v)
+	end
+	return FreqChannelInfo(; kw...)
+end
+
+FreqChannelInfo(imo::Imo, url::AbstractString) = FreqChannelInfo(_metadata(imo, url))
+
+"""
+    InstrumentInfo(metadata::AbstractDict)
+    InstrumentInfo(imo::Imo, url)
+
+Instrument geometry from a dictionary or an IMO `instrument_info` data file,
+as `InstrumentInfo.from_dict` / `from_imo` in litebird_sim: the angles are read
+from `boresight_rotangle_deg`, `spin_boresight_angle_deg` and
+`spin_rotangle_deg`, the wafers from `wafers` and `waferspace`. A `null` value
+(`nothing`) is treated as a missing key.
+"""
+function InstrumentInfo(d::AbstractDict)
+	get_value(key, default) = something(get(d, key, nothing), default)
+	return InstrumentInfo(
+		name = string(get_value("name", "mock-instrument")),
+		boresight_rotangle_rad = deg2rad(Float64(get_value("boresight_rotangle_deg", 0.0))),
+		spin_boresight_angle_rad = deg2rad(Float64(get_value("spin_boresight_angle_deg", 0.0))),
+		spin_rotangle_rad = deg2rad(Float64(get_value("spin_rotangle_deg", 0.0))),
+		hwp_rpm = Float64(get_value("hwp_rpm", 0.0)),
+		number_of_channels = Int(get_value("number_of_channels", 0)),
+		channel_names = String.(get_value("channel_names", String[])),
+		channel_objs = url_to_uuid.(String.(get_value("channel_objs", String[]))),
+		wafer_names = String.(get_value("wafers", String[])),
+		wafer_space_cm = Float64(get_value("waferspace", 0.0)),
+	)
+end
+
+InstrumentInfo(imo::Imo, url::AbstractString) = InstrumentInfo(_metadata(imo, url))
+
+"""
+    detector_list_from_parameters(imo, definitions) -> Vector{DetectorInfo}
+
+Build detectors from a list of dictionaries, e.g. the `[[detectors]]` tables of
+a parameter file, as `detector_list_from_parameters` in litebird_sim. Each
+entry is one of
+
+- `channel_info_obj = url`: the detectors of a channel, optionally only the
+  first `num_of_detectors_from_channel` (all of them if the channel has fewer,
+  as in litebird_sim; a negative number throws an `ArgumentError`), or a single
+  boresight detector named `detector_name` when
+  `use_only_one_boresight_detector = true`;
+- `detector_info_obj = url`: one detector from the IMO;
+- neither: a default `DetectorInfo`.
+
+Any `DetectorInfo` field given in an entry (other than with
+`channel_info_obj`) overrides the value read from the IMO.
+"""
+function detector_list_from_parameters(imo::Union{Nothing, Imo}, definitions::AbstractVector)
+	result = DetectorInfo[]
+	for def in definitions
+		def isa AbstractDict || throw(ArgumentError("each detector definition must be a dictionary, got $(typeof(def))"))
+		if haskey(def, "channel_info_obj")
+			imo === nothing && throw(ArgumentError("channel_info_obj needs an IMO"))
+			ch = FreqChannelInfo(imo, def["channel_info_obj"])
+			if get(def, "use_only_one_boresight_detector", false)
+				push!(result, get_boresight_detector(ch; name = get(def, "detector_name", "mock_boresight")))
+				continue
+			end
+			n = get(def, "num_of_detectors_from_channel", ch.number_of_detectors)
+			n >= 0 || throw(ArgumentError("num_of_detectors_from_channel must be ≥ 0, got $n"))
+			append!(result, [DetectorInfo(imo, uuid) for uuid in ch.detector_objs[1:min(n, end)]])
+			continue
+		end
+		det = if haskey(def, "detector_info_obj")
+			imo === nothing && throw(ArgumentError("detector_info_obj needs an IMO"))
+			DetectorInfo(imo, def["detector_info_obj"])
+		else
+			DetectorInfo()
+		end
+		push!(result, _with_fields(det, def))
+	end
+	return result
 end

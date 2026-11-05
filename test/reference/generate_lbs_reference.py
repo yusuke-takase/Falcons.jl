@@ -19,11 +19,18 @@ Layout (h5py, row-major; Julia reads every array with its axes reversed):
     E_gal/, E_ecl/                h-maps: <det>/<n>,<m>/{Re,Im}
     F/hitmap                      (npix,)
     G/, H/, I/                    time-dependent inputs stored next to the outputs
+    imo/                          values litebird_sim reads from mock_imo/schema.json
+    J/                            pointings of an observation built from the mock IMO
+
+The script also (re)writes the synthetic instrument database
+`mock_imo/schema.json` used by the IMO tests.
 """
 
+import json
 import os
 import subprocess
 import tempfile
+import uuid
 
 import astropy
 import ducc0
@@ -35,6 +42,7 @@ from litebird_sim.coordinates import ECL_TO_GAL_QUAT, ECL_TO_GAL_ROT_MATRIX
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUTPUT = os.path.join(HERE, "lbs_reference.h5")
+MOCK_IMO_DIR = os.path.join(HERE, "mock_imo")
 
 SPIN_SUN_ANGLE_RAD = np.deg2rad(45.0)
 PRECESSION_RATE_HZ = 1.0 / (192.348 * 60.0)
@@ -173,11 +181,191 @@ def wobble_series(start_time, nquats, rate_hz, amplitude_rad, period_s, nominal)
     return quats
 
 
+# ----------------------------------------------------------------------------
+# Synthetic instrument database (litebird_sim / libinsdb flat-file layout)
+
+
+def _uuid(path):
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, "falcons-mock-imo" + path))
+
+
+def _unit(q):
+    q = np.asarray(q, dtype=float)
+    return q / np.linalg.norm(q)
+
+
+MOCK_RELEASES = ("vMOCK1", "vMOCK2")
+MOCK_TIME_DEP_START = 99.0
+MOCK_CHANNELS = {
+    "M-100": ["M100_00_A", "M100_00_B", "M100_01_A"],
+    "M-200": ["M200_00_A"],
+}
+
+
+def _detector_metadata(name, channel, k):
+    angles = np.deg2rad([1.0 + k, 30.0 * k, 10.0 * k])
+    meta = {
+        "name": name,
+        "wafer": f"W{k % 2}",
+        "pixel": str(k + 7),
+        "pixtype": "MP1",
+        "channel": channel,
+        "squid": k + 1,
+        "sampling_rate_hz": 19,
+        "fwhm_arcmin": 30.0 + k,
+        "ellipticity": 1.05,
+        "psi_rad": 0.1 * k,
+        "bandcenter_ghz": float(channel[2:]),
+        "bandwidth_ghz": 0.23 * float(channel[2:]),
+        "net_ukrts": 50.0 + k,
+        "pol_sensitivity_ukarcmin": 70.0 + k,
+        "fknee_mhz": 20,
+        "fmin_hz": 1e-5,
+        "alpha": 1.0,
+        "pol": "T" if k % 2 == 0 else "B",
+        "orient": "Q",
+        "quat": list(2.0 * det_quat(*angles)),  # not normalised on purpose
+        "pol_angle_rad": 0.25 * k,
+        "pointing_theta_phi_psi_deg": list(np.rad2deg(angles)),
+        "pointing_u_v": [0.1 * k, -0.2 * k],
+        "unrecognised_field": 1.0,  # not a DetectorInfo field: ignored
+    }
+    if name == "M100_01_A":
+        t = MOCK_TIME_DEP_START + np.arange(70.0)
+        quats = []
+        for tk in t:
+            q = det_quat(*angles)
+            lbs.quat_left_multiply(q, *lbs.quat_rotation_x(np.deg2rad(2.0 / 60.0) * np.sin(2 * np.pi * (tk - t[0]) / 31.0)))
+            quats.append(list(q))
+        meta["quat"] = {"start_time": MOCK_TIME_DEP_START, "sampling_rate_hz": 1.0, "quats": quats}
+    return meta
+
+
+def build_mock_imo():
+    entities, quantities, data_files = [], [], []
+    release_files = {tag: [] for tag in MOCK_RELEASES}
+
+    def add_quantity(entity_path, name, metadata, releases=MOCK_RELEASES, date="2026-01-01T00:00:00+00:00", key=""):
+        q_uuid = _uuid(entity_path + "/" + name)
+        if not any(q["uuid"] == q_uuid for q in quantities):
+            quantities.append({"uuid": q_uuid, "name": name, "format_spec": _uuid("/format"), "entity": _uuid(entity_path)})
+        f_uuid = _uuid(entity_path + "/" + name + "/" + key)
+        data_files.append({"uuid": f_uuid, "name": name, "upload_date": date, "metadata": metadata,
+                           "quantity": q_uuid, "spec_version": "1.0", "dependencies": []})
+        for tag in releases:
+            release_files[tag].append(f_uuid)
+        return f_uuid
+
+    channel_entities = []
+    channel_uuids = []
+    for channel, dets in MOCK_CHANNELS.items():
+        det_entities = [{"uuid": _uuid(f"/satellite/MOCKFT/{channel}/{d}"), "name": d} for d in dets]
+        channel_entities.append({"uuid": _uuid(f"/satellite/MOCKFT/{channel}"), "name": channel, "children": det_entities})
+        det_uuids = []
+        for k, d in enumerate(dets):
+            path = f"/satellite/MOCKFT/{channel}/{d}"
+            if d == "M100_00_A":
+                old = _detector_metadata(d, channel, k)
+                old["quat"] = [0.0, 0.0, 0.0, 1.0]
+                add_quantity(path, "detector_info", old, releases=("vMOCK1",), date="2025-01-01T00:00:00+00:00", key="old")
+                det_uuids.append(add_quantity(path, "detector_info", _detector_metadata(d, channel, k), releases=("vMOCK2",)))
+            else:
+                det_uuids.append(add_quantity(path, "detector_info", _detector_metadata(d, channel, k)))
+        center = float(channel[2:])
+        ch_meta = {
+            "channel": channel, "bandcenter_ghz": center, "bandwidth_ghz": 0.23 * center,
+            "sampling_rate_hz": 19, "fwhm_arcmin": 30.0, "fknee_mhz": 20, "fmin_hz": 1e-5, "alpha": 1.0,
+            "detector_names": dets,
+            # one entry given as a URL to exercise the UUID extraction
+            "detector_objs": [f"/data_files/{det_uuids[0]}"] + det_uuids[1:],
+            "pol_sensitivity_channel_ukarcmin": 20.0,
+        }
+        if channel == "M-100":
+            ch_meta.update(number_of_detectors=len(dets), net_detector_ukrts=50.0, net_channel_ukrts=0.0)
+        else:
+            ch_meta.update(net_detector_ukrts=0.0, net_channel_ukrts=10.0)
+        channel_uuids.append(add_quantity(f"/satellite/MOCKFT/{channel}", "channel_info", ch_meta))
+
+    add_quantity("/satellite/MOCKFT", "instrument_info", {
+        "name": "MOCKFT", "boresight_rotangle_deg": 12.0, "spin_boresight_angle_deg": 50.0,
+        "spin_rotangle_deg": 180.0, "hwp_rpm": 46.0, "number_of_channels": len(MOCK_CHANNELS),
+        "channel_names": list(MOCK_CHANNELS), "channel_objs": channel_uuids, "sampling_rate_hz": 19,
+        "wafers": ["W0", "W1"], "waferspace": 8.0,
+    })
+    add_quantity("/satellite", "scanning_parameters", {
+        "spin_sun_angle_deg": 45.0, "precession_period_min": 192.348, "spin_rate_rpm": 0.05,
+        "mission_duration_year": 3.0,
+    })
+    entities = [{"uuid": _uuid("/satellite"), "name": "satellite", "children": [
+        {"uuid": _uuid("/satellite/MOCKFT"), "name": "MOCKFT", "children": channel_entities}]}]
+    schema = {
+        "instrumentdb": {"version": "mock"},
+        "entities": entities,
+        "format_specifications": [{"uuid": _uuid("/format"), "document_ref": "MOCK-0", "title": "mock",
+                                   "doc_file_name": "", "doc_mime_type": "", "file_mime_type": "application/json"}],
+        "quantities": quantities,
+        "data_files": data_files,
+        "releases": [{"tag": tag, "release_date": f"2026-0{i + 1}-01T00:00:00+00:00", "comment": "synthetic",
+                      "data_files": release_files[tag]} for i, tag in enumerate(MOCK_RELEASES)],
+    }
+    os.makedirs(MOCK_IMO_DIR, exist_ok=True)
+    with open(os.path.join(MOCK_IMO_DIR, "schema.json"), "w") as out:
+        json.dump(schema, out, indent=1)
+
+
+def store_imo_reference(f, workdir):
+    imo = lbs.Imo(flatfile_location=MOCK_IMO_DIR)
+    rel = "/releases/vMOCK2/satellite"
+    g = f.create_group("imo")
+    inst = lbs.InstrumentInfo.from_imo(imo, f"{rel}/MOCKFT/instrument_info")
+    for key in ("boresight_rotangle_rad", "spin_boresight_angle_rad", "spin_rotangle_rad", "hwp_rpm", "wafer_space_cm"):
+        g.attrs[f"instrument_{key}"] = getattr(inst, key)
+    write(g, "instrument_bore2spin_quat", inst.bore2spin_quat.quats[0])
+    sstr = lbs.SpinningScanningStrategy.from_imo(imo, f"{rel}/scanning_parameters")
+    for key in ("spin_sun_angle_rad", "precession_rate_hz", "spin_rate_hz"):
+        g.attrs[f"scan_{key}"] = getattr(sstr, key)
+    for channel in MOCK_CHANNELS:
+        ch = lbs.FreqChannelInfo.from_imo(imo, f"{rel}/MOCKFT/{channel}/channel_info")
+        c = g.create_group(f"channel/{channel}")
+        for key in ("number_of_detectors", "net_detector_ukrts", "net_channel_ukrts", "bandcenter_ghz", "fmin_hz", "alpha"):
+            c.attrs[key] = getattr(ch, key)
+        c.attrs["detector_objs"] = [str(x) for x in ch.detector_objs]
+        for det_name in MOCK_CHANNELS[channel]:
+            det = lbs.DetectorInfo.from_imo(imo, f"{rel}/MOCKFT/{channel}/{det_name}/detector_info")
+            d = c.create_group(det_name)
+            for key in ("sampling_rate_hz", "fwhm_arcmin", "bandcenter_ghz", "net_ukrts", "fknee_mhz", "pol_angle_rad",
+                        "psi_rad", "squid"):
+                d.attrs[key] = getattr(det, key)
+            for key in ("wafer", "pixel", "pol", "orient", "channel"):
+                d.attrs[key] = str(getattr(det, key))
+            write(d, "quats", det.quat.quats)
+            if det.quat.start_time is not None:
+                d.attrs["quat_start_time_s"] = det.quat.start_time
+                d.attrs["quat_sampling_rate_hz"] = det.quat.sampling_rate_hz
+
+    # J: observation of the M-100 detectors described entirely by the IMO
+    dets = lbs.detector_list_from_parameters(imo, [{"channel_info_obj": f"{rel}/MOCKFT/M-100/channel_info"}])
+    sim = lbs.Simulation(base_path=os.path.join(workdir, "J"), start_time=100.0, duration_s=60.0,
+                         random_seed=12345, imo=imo)
+    sim.set_instrument(inst)
+    sim.create_observations(detectors=dets, allocate_tod=False)
+    sim.set_scanning_strategy(scanning_strategy=sstr, delta_time_s=1.0 / 19.0)
+    sim.set_hwp(lbs.IdealHWP(ang_speed_radpsec=inst.hwp_rpm * 2 * np.pi / 60))
+    sim.prepare_pointings()
+    obs = sim.observations[0]
+    j = f.create_group("J")
+    ptg, hwp = obs.get_pointings("all")
+    write(j, "pointings_ecl", ptg)
+    write(j, "hwp_angle", hwp)
+    j.attrs["detector_names"] = [d.name for d in dets]
+
+
 def main():
     commit = subprocess.run(
         ["git", "-C", os.path.dirname(lbs.__file__), "rev-parse", "--short", "HEAD"],
         capture_output=True, text=True,
     ).stdout.strip()
+    build_mock_imo()
     with tempfile.TemporaryDirectory() as workdir, h5py.File(OUTPUT, "w") as f:
         f.attrs["litebird_sim_commit"] = commit
         f.attrs["litebird_sim_version"] = lbs.__version__
@@ -291,6 +479,8 @@ def main():
         write(g, "perturbation_quats", i_series["quats"])
         g.attrs["perturbation_start_time_s"] = START_TIME_B
         g.attrs["perturbation_sampling_rate_hz"] = SAMPLING_RATE_HZ
+
+        store_imo_reference(f, workdir)
 
     print("wrote", OUTPUT, f"({os.path.getsize(OUTPUT) / 2**20:.2f} MiB)")
 
